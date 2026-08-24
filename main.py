@@ -23,6 +23,8 @@ SOUND_VISUALS = {
 
 pygame.init()
 
+font = pygame.font.Font(None, 32)
+
 screen = pygame.display.set_mode((800, 600))
 pygame.display.set_caption("Spectra AI")
 
@@ -44,8 +46,15 @@ while running:
     # 2. Get latest sound information
     state = classifier.get_state()
 
+    print(state.keys())
+
     sound_class = state["class_name"]
+    confidence = state["confidence"]
     rms = state["rms"]
+
+# Caution: confirm the actual keys returned by classifier.get_state():
+# "class_name", "confidence", "rms"
+
 
     # 3. Find the visual style for that sound
     visual = SOUND_VISUALS.get(
@@ -120,6 +129,34 @@ while running:
             current_color,
             points
         )
+
+    fps = clock.get_fps()
+
+    category_text = font.render(
+        f"Detected: {sound_class}",
+        True,
+        current_color
+        )
+
+    confidence_text = font.render(
+        f"Confidence: {confidence * 100:.1f}%",
+        True,
+        (255, 255, 255)
+        )
+
+  #confidence * 100 assumes confidence is between 0 and 1.
+
+    fps_text = font.render(
+        f"FPS: {fps:.0f}",
+        True,
+        (255, 255, 255)
+        )
+
+    screen.blit(category_text, (20, 20))
+    screen.blit(confidence_text, (20, 55))
+    screen.blit(fps_text, (20, 90))
+
+
 
     # 8. Update display
     pygame.display.flip()
