@@ -47,9 +47,12 @@ def sound_to_sample(model):
 
         sample = np.frombuffer(data, dtype=np.float32)
 
-        y_pred = model.predict(sample)
+        normalized = sample / 32768.0
+        intensity = np.sqrt(np.mean(normalized ** 2))
 
-        print(y_pred)
+        y_pred = model.predict(sample.reshape(1,-1))
+
+        print(y_pred, intensity)
 
 if __name__ == "__main__":
     model = create_model()
