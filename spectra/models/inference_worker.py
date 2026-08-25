@@ -70,6 +70,14 @@ class YAMNetInferenceWorker(threading.Thread):
         with self.lock:
             return self.latest_predictions.copy()
 
+    def get_rms(self):
+        with self.lock:
+            return float(
+                np.sqrt(
+                    np.mean(self.rolling_buffer ** 2)
+                    )
+                )
+
     def stop(self):
         self.running = False
 

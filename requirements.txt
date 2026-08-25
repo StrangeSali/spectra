@@ -1,7 +1,6 @@
 pandas
 numpy
 pygame
-math
 absl-py==2.5.0
 anyio==4.14.2
 argon2-cffi==25.1.0

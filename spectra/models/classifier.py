@@ -15,7 +15,9 @@ def inicialize_model():
     class_names = pd.read_csv(class_map_path)['display_name'].tolist()
 
     print("YAMNet model loaded successfully.")
-    return yamnet_model
+    return yamnet_model, class_names
+
+yamnet_model, class_names = inicialize_model()
 
 def load_audio(filepath):
     """
