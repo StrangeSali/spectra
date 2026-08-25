@@ -45,10 +45,18 @@ def sound_to_sample(model):
 
         mean_scores = scores.numpy().mean(axis=0)
 
-        top_5_classes = np.argpartition(mean_scores, -3)[-3:]
-
         class_names = pd.read_csv(model.class_map_path().numpy().decode('utf-8'))['display_name'].tolist()
 
-        yamnet_classes = [SOUNDS_DICT.get(class_names[i].strip(),DEFAULT_CATEGORY) for i in top_5_classes]
+        top_5_classes = np.argpartition(mean_scores, -3)[-3:]
 
-        print(yamnet_classes)
+        top_3_dict = {}
+        for idx in top_5_classes:
+            category = SOUNDS_DICT.get(class_names[idx].strip(), DEFAULT_CATEGORY)
+            confidence = float(mean_scores[idx])
+
+            # Keep the highest confidence if a category repeats
+            if category not in top_3_dict or confidence > top_3_dict[category]:
+                top_3_dict[category] = confidence
+
+        # 3. Print the resulting dictionary
+        print(top_3_dict)
