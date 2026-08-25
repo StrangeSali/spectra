@@ -2,4 +2,7 @@ pandas
 numpy
 ipdb
 pyaudio
-scikit-learn
+tensorflow
+tensorflow_hub
+setuptools<82.0.0
+soundfile
