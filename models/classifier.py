@@ -5,15 +5,17 @@ import pandas as pd
 import soundfile as sf
 
 
-# Load YAMNet once when this module is imported (not on every call)
-print("Loading YAMNet model...")
-yamnet_model = hub.load('https://tfhub.dev/google/yamnet/1')
+def inicialize_model():
+    # Load YAMNet once when this module is imported (not on every call)
+    print("Loading YAMNet model...")
+    yamnet_model = hub.load('https://tfhub.dev/google/yamnet/1')
 
-# Load the 521 AudioSet class names
-class_map_path = yamnet_model.class_map_path().numpy().decode('utf-8')
-class_names = pd.read_csv(class_map_path)['display_name'].tolist()
+    # Load the 521 AudioSet class names
+    class_map_path = yamnet_model.class_map_path().numpy().decode('utf-8')
+    class_names = pd.read_csv(class_map_path)['display_name'].tolist()
 
-print("YAMNet model loaded successfully.")
+    print("YAMNet model loaded successfully.")
+    return yamnet_model
 
 def load_audio(filepath):
     """
