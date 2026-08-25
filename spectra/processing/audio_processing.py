@@ -1,8 +1,8 @@
 import sys
-import numpy as np
 import pandas as pd
+import numpy as np
 import pyaudio
-from sklearn.dummy import DummyClassifier
+from spectra.processing.category_mapping import SOUNDS_DICT, DEFAULT_CATEGORY
 
 # --- YAMNET COMPATIBLE CONFIGURATION ---
 SAMPLE_RATE = 16000
@@ -10,17 +10,6 @@ CHUNK_SIZE = 1024
 MAX_QUEUE_SIZE = 10
 CHANNELS = 1
 FORMAT = pyaudio.paFloat32
-
-
-def create_model():
-
-    classy = DummyClassifier(strategy="most_frequent")
-    X_train = np.zeros((10, CHUNK_SIZE)) # 10 dummy samples
-    y_train = np.array([0, 1, 2, 1, 0, 2, 0, 1, 2, 1]) # Fixed array format
-    classy.fit(X_train, y_train)
-
-    return classy
-
 
 def sound_to_sample(model):
     """
@@ -49,23 +38,17 @@ def sound_to_sample(model):
         sample = np.frombuffer(data, dtype=np.float32)
 
         normalized = sample / 32768.0
+
         intensity = np.sqrt(np.mean(normalized ** 2))
 
         scores, embeddings, spectrogram = model(sample)
 
         mean_scores = scores.numpy().mean(axis=0)
 
-        top_class_index = mean_scores.argmax()
-
-        class_map_path = model.class_map_path().numpy().decode('utf-8')
+        top_5_classes = np.argpartition(mean_scores, -3)[-3:]
 
         class_names = pd.read_csv(model.class_map_path().numpy().decode('utf-8'))['display_name'].tolist()
 
-        # 4. Get the final classification string
-        top_class = class_names[top_class_index]
+        yamnet_classes = [SOUNDS_DICT.get(class_names[i].strip(),DEFAULT_CATEGORY) for i in top_5_classes]
 
-        print(top_class, intensity)
-
-if __name__ == "__main__":
-    model = create_model()
-    sound_to_sample(model)
+        print(yamnet_classes)
