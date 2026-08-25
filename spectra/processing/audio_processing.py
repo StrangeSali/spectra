@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import pandas as pd
 import pyaudio
 from sklearn.dummy import DummyClassifier
 
@@ -50,9 +51,20 @@ def sound_to_sample(model):
         normalized = sample / 32768.0
         intensity = np.sqrt(np.mean(normalized ** 2))
 
-        y_pred = model.predict(sample.reshape(1,-1))
+        scores, embeddings, spectrogram = model(sample)
 
-        print(y_pred, intensity)
+        mean_scores = scores.numpy().mean(axis=0)
+
+        top_class_index = mean_scores.argmax()
+
+        class_map_path = model.class_map_path().numpy().decode('utf-8')
+
+        class_names = pd.read_csv(model.class_map_path().numpy().decode('utf-8'))['display_name'].tolist()
+
+        # 4. Get the final classification string
+        top_class = class_names[top_class_index]
+
+        print(top_class, intensity)
 
 if __name__ == "__main__":
     model = create_model()
