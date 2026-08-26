@@ -11,6 +11,13 @@ _class_map_path = YAMNET_MODEL.class_map_path().numpy().decode("utf-8")
 CLASS_NAMES = pd.read_csv(_class_map_path)["display_name"].tolist()
 print("YAMNet model loaded successfully.")
 
+# Lowercase aliases: inference_worker.py imports these names.
+# Kept as separate variables (not a rename) so classify_wav() and any
+# other existing code that references YAMNET_MODEL / CLASS_NAMES
+# keeps working unchanged.
+yamnet_model = YAMNET_MODEL
+class_names = CLASS_NAMES
+
 
 def inicialize_model():
     """Instanciates Yamnet model"""
