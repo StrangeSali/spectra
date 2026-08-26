@@ -7,7 +7,9 @@ import re
 CATEGORY_KEYWORDS = {
     "Alert": [
         "siren", "alarm", "emergency", "smoke detector", "fire alarm",
-        "civil defense", "buzzer", "gunshot", "explosion"
+        "civil defense", "buzzer", "gunshot", "explosion",
+        # clapping / hand-noise related YAMNet labels
+        "hands", "slap", "smack", "finger snapping"
     ],
     "Human": [
         "speech", "conversation", "shout", "yell", "cry", "sob",
