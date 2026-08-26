@@ -1,4 +1,4 @@
-from processing.audio_processing import sound_to_sample
+from processing.audio_processing import sound_to_sample, generate_classification
 from models.classifier import inicialize_model
 
 import numpy as np
@@ -8,4 +8,6 @@ import pandas as pd
 import soundfile as sf
 
 model = inicialize_model()
+
+#Open mic, process sound and return classification
 sound_to_sample(model)
