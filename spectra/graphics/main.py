@@ -61,6 +61,8 @@ previous_rms = 0.0
 rings = []
 particles = []
 
+ACTIVE_TIMEOUT_MS = 1500
+active_categories = {}
 
 while running:
 
@@ -72,9 +74,17 @@ while running:
     # 2. Get latest YAMNet predictions
     predictions = worker.get_latest_predictions()
 
-    active_sounds = []
-    seen_categories = set()
+    # DEBUG: show raw YAMNet predictions
+    if predictions:
+        print("\n--- YAMNet Top Predictions ---")
+        for class_name, confidence in predictions:
+            print(f"{class_name}: {confidence:.2f}")
 
+
+
+    now = pygame.time.get_ticks()
+
+    # Update persistent active categories
     for class_name, confidence in predictions:
 
         category = map_to_category(
@@ -82,25 +92,55 @@ while running:
             confidence
         )
 
-        if (
-            category != "Background"
-            and category not in seen_categories
-        ):
-            active_sounds.append({
-                "class_name": class_name,
-                "category": category,
-                "confidence": confidence
-            })
+        if category != "Background":
 
-            seen_categories.add(category)
+            existing = active_categories.get(category)
 
-        if len(active_sounds) == 3:
-            break
+            if (
+                existing is None
+                or confidence >= existing["confidence"]
+            ):
+                active_categories[category] = {
+                    "class_name": class_name,
+                    "confidence": confidence,
+                    "last_seen": now
+                }
+
+            else:
+                # Category is still being detected:
+                # keep it alive even if this specific class has lower confidence
+                existing["last_seen"] = now
+
+    # Remove categories that have not been seen recently
+    active_categories = {
+        category: data
+        for category, data in active_categories.items()
+        if now - data["last_seen"] < ACTIVE_TIMEOUT_MS
+    }
+
+    # Convert persistent category memory into drawable sounds
+    active_sounds = [
+        {
+            "category": category,
+            "class_name": data["class_name"],
+            "confidence": data["confidence"]
+        }
+        for category, data in active_categories.items()
+    ]
+
+    # Strongest categories first
+    active_sounds.sort(
+        key=lambda sound: sound["confidence"],
+        reverse=True
+    )
+
+    # Maximum 3 simultaneous visuals
+    active_sounds = active_sounds[:3]
 
     # 3. Get global audio energy
     rms = worker.get_rms()
 
-    # RMS currently applies to the whole sound scene
+    # RMS controls overall scene energy / size
     target_size = 30 + rms * 150
 
     current_size = lerp(
@@ -120,7 +160,7 @@ while running:
 
     previous_rms = rms
 
-    # 5. Add subtle particles
+    # 5. Add subtle particles when sound is active
     if rms > 0.05:
         angle = random.uniform(0, 2 * math.pi)
         speed = random.uniform(0.5, 2.0)
@@ -174,7 +214,7 @@ while running:
 
         x, y = SHAPE_POSITIONS[index]
 
-        # Confidence -> opacity
+        # Confidence controls opacity
         alpha = int(80 + confidence * 175)
 
         rgba_color = (
@@ -247,7 +287,12 @@ while running:
 
             pygame.draw.circle(
                 ring_surface,
-                (150, 170, 220, ring["alpha"]),
+                (
+                    150,
+                    170,
+                    220,
+                    ring["alpha"]
+                ),
                 (400, 300),
                 ring["radius"],
                 width=3
