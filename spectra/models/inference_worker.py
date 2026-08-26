@@ -100,7 +100,6 @@ class YAMNetInferenceWorker(threading.Thread):
         with self.lock:
             return self.latest_predictions.copy()
 
-<<<<<<< HEAD
     def get_rms(self):
         with self.lock:
             return float(
@@ -108,12 +107,10 @@ class YAMNetInferenceWorker(threading.Thread):
                     np.mean(self.rolling_buffer ** 2)
                     )
                 )
-=======
     def get_latest_category(self):
         """Thread-safe read of the current smoothed category (Alert, Human, ...)."""
         with self.lock:
             return self.current_category
->>>>>>> 92ef9ab0b7d3b9646606b9a3bbe0611cc9af75c0
 
     def stop(self):
         self.running = False
