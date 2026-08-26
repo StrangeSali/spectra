@@ -12,6 +12,12 @@ CLASS_NAMES = pd.read_csv(_class_map_path)["display_name"].tolist()
 print("YAMNet model loaded successfully.")
 
 
+def inicialize_model():
+    """Instanciates Yamnet model"""
+    model = hub.load("https://tfhub.dev/google/yamnet/1")
+    return model
+
+
 def load_audio(filepath: str) -> np.ndarray:
     """Load a .wav file and ensure it matches YAMNet's expected format:
 
