@@ -2,7 +2,7 @@ import threading
 import time
 import numpy as np
 import pyaudio
-from spectra.models.classifier import yamnet_model, class_names
+from spectra.models.classifier import YAMNET_MODEL, CLASS_NAMES
 
 # --- YAMNET COMPATIBLE CONFIGURATION ---
 SAMPLE_RATE = 16000
@@ -57,10 +57,10 @@ class YAMNetInferenceWorker(threading.Thread):
         pa.terminate()
 
     def _run_inference(self, waveform):
-        scores, embeddings, spectrogram = yamnet_model(waveform)
+        scores, embeddings, spectrogram = YAMNET_MODEL(waveform)
         mean_scores = np.mean(scores.numpy(), axis=0)
         top_indices = np.argsort(mean_scores)[::-1][:5]
-        results = [(class_names[i], float(mean_scores[i])) for i in top_indices]
+        results = [(CLASS_NAMES[i], float(mean_scores[i])) for i in top_indices]
 
         with self.lock:
             self.latest_predictions = results

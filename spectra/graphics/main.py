@@ -35,6 +35,11 @@ SOUND_VISUALS = {
     }
 }
 
+SHAPE_POSITIONS = [
+    (200, 300),
+    (400, 300),
+    (600, 300)
+]
 
 pygame.init()
 
@@ -64,50 +69,47 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    # 2. Get latest model prediction
+    # 2. Get latest YAMNet predictions
     predictions = worker.get_latest_predictions()
 
-    if predictions:
-        class_name, confidence = predictions[0]
-    else:
-        class_name = "Background"
-        confidence = 0.0
+    active_sounds = []
+    seen_categories = set()
 
-    # Convert raw YAMNet class to accessibility category
-    category = map_to_category(
-        class_name,
-        confidence
-    )
+    for class_name, confidence in predictions:
 
-    # Get current audio energy
+        category = map_to_category(
+            class_name,
+            confidence
+        )
+
+        if (
+            category != "Background"
+            and category not in seen_categories
+        ):
+            active_sounds.append({
+                "class_name": class_name,
+                "category": category,
+                "confidence": confidence
+            })
+
+            seen_categories.add(category)
+
+        if len(active_sounds) == 3:
+            break
+
+    # 3. Get global audio energy
     rms = worker.get_rms()
 
-    # 3. Find visual identity
-    visual = SOUND_VISUALS.get(
-        category,
-        SOUND_VISUALS["Background"]
-    )
-
-    target_color = visual["color"]
-    shape = visual["shape"]
-
-    # 4. RMS controls visual energy / size
+    # RMS currently applies to the whole sound scene
     target_size = 30 + rms * 150
 
-    # 5. Smooth transitions
     current_size = lerp(
         current_size,
         target_size,
         0.1
     )
 
-    current_color = lerp_color(
-        current_color,
-        target_color,
-        0.1
-    )
-
-    # 6. Detect audio spike -> expanding ring
+    # 4. Detect audio spike -> expanding ring
     spike_threshold = 0.02
 
     if rms - previous_rms > spike_threshold:
@@ -118,7 +120,7 @@ while running:
 
     previous_rms = rms
 
-    # 7. Add subtle particles when sound is active
+    # 5. Add subtle particles
     if rms > 0.05:
         angle = random.uniform(0, 2 * math.pi)
         speed = random.uniform(0.5, 2.0)
@@ -131,10 +133,10 @@ while running:
             "life": 60
         })
 
-    # 8. Clear screen
+    # 6. Clear screen
     screen.fill((8, 10, 25))
 
-    # 9. Persistent listening waveform
+    # 7. Persistent listening waveform
     wave_points = []
 
     time_offset = pygame.time.get_ticks() * 0.003
@@ -155,68 +157,82 @@ while running:
         2
     )
 
-    # 10. Confidence controls visual clarity
-    alpha = int(80 + confidence * 175)
+    # 8. Draw up to 3 active sounds
+    for index, sound in enumerate(active_sounds):
 
-    shape_surface = pygame.Surface(
-        (800, 600),
-        pygame.SRCALPHA
-    )
+        class_name = sound["class_name"]
+        category = sound["category"]
+        confidence = sound["confidence"]
 
-    rgba_color = (
-        *current_color,
-        alpha
-    )
-
-    # 11. Draw main shape
-    if shape == "circle":
-
-        draw_circle(
-            shape_surface,
-            rgba_color,
-            (400, 300),
-            int(current_size)
+        visual = SOUND_VISUALS.get(
+            category,
+            SOUND_VISUALS["Background"]
         )
 
-    elif shape == "triangle":
+        shape = visual["shape"]
+        color = visual["color"]
+
+        x, y = SHAPE_POSITIONS[index]
+
+        # Confidence -> opacity
+        alpha = int(80 + confidence * 175)
+
+        rgba_color = (
+            *color,
+            alpha
+        )
+
+        shape_surface = pygame.Surface(
+            (800, 600),
+            pygame.SRCALPHA
+        )
 
         size = int(current_size)
 
-        points = [
-            (400, 300 - size),
-            (400 - size, 300 + size),
-            (400 + size, 300 + size)
-        ]
+        if shape == "circle":
 
-        draw_polygon(
+            draw_circle(
+                shape_surface,
+                rgba_color,
+                (x, y),
+                size
+            )
+
+        elif shape == "triangle":
+
+            points = [
+                (x, y - size),
+                (x - size, y + size),
+                (x + size, y + size)
+            ]
+
+            draw_polygon(
+                shape_surface,
+                rgba_color,
+                points
+            )
+
+        elif shape == "polygon":
+
+            points = [
+                (x - size, y - size),
+                (x + size, y - size),
+                (x + size, y + size),
+                (x - size, y + size)
+            ]
+
+            draw_polygon(
+                shape_surface,
+                rgba_color,
+                points
+            )
+
+        screen.blit(
             shape_surface,
-            rgba_color,
-            points
+            (0, 0)
         )
 
-    elif shape == "polygon":
-
-        size = int(current_size)
-
-        points = [
-            (400 - size, 300 - size),
-            (400 + size, 300 - size),
-            (400 + size, 300 + size),
-            (400 - size, 300 + size)
-        ]
-
-        draw_polygon(
-            shape_surface,
-            rgba_color,
-            points
-        )
-
-    screen.blit(
-        shape_surface,
-        (0, 0)
-    )
-
-    # 12. Draw expanding rings
+    # 9. Draw expanding rings
     for ring in rings:
 
         ring["radius"] += 4
@@ -231,10 +247,7 @@ while running:
 
             pygame.draw.circle(
                 ring_surface,
-                (
-                    *current_color,
-                    ring["alpha"]
-                ),
+                (150, 170, 220, ring["alpha"]),
                 (400, 300),
                 ring["radius"],
                 width=3
@@ -251,7 +264,7 @@ while running:
         if ring["alpha"] > 0
     ]
 
-    # 13. Draw particles
+    # 10. Draw particles
     for particle in particles:
 
         particle["x"] += particle["vx"]
@@ -260,7 +273,7 @@ while running:
 
         pygame.draw.circle(
             screen,
-            current_color,
+            (150, 170, 220),
             (
                 int(particle["x"]),
                 int(particle["y"])
@@ -274,20 +287,27 @@ while running:
         if particle["life"] > 0
     ]
 
-    # 14. HUD
+    # 11. HUD
     fps = clock.get_fps()
 
-    category_text = font.render(
-        f"{category}: {class_name}",
-        True,
-        current_color
-    )
+    for index, sound in enumerate(active_sounds):
 
-    confidence_text = font.render(
-        f"Confidence: {confidence * 100:.1f}%",
-        True,
-        (255, 255, 255)
-    )
+        category = sound["category"]
+        class_name = sound["class_name"]
+        confidence = sound["confidence"]
+
+        color = SOUND_VISUALS[category]["color"]
+
+        sound_text = font.render(
+            f"{category}: {class_name} ({confidence * 100:.1f}%)",
+            True,
+            color
+        )
+
+        screen.blit(
+            sound_text,
+            (20, 20 + index * 35)
+        )
 
     fps_text = font.render(
         f"FPS: {fps:.0f}",
@@ -296,24 +316,14 @@ while running:
     )
 
     screen.blit(
-        category_text,
-        (20, 20)
-    )
-
-    screen.blit(
-        confidence_text,
-        (20, 55)
-    )
-
-    screen.blit(
         fps_text,
-        (20, 90)
+        (20, 130)
     )
 
-    # 15. Update display
+    # 12. Update display
     pygame.display.flip()
 
-    # 16. Limit frame rate
+    # 13. Limit frame rate
     clock.tick(60)
 
 
