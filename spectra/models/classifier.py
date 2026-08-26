@@ -24,6 +24,19 @@ CLASS_NAMES = pd.read_csv(
 
 print("YAMNet model loaded successfully.")
 
+# Lowercase aliases: inference_worker.py imports these names.
+# Kept as separate variables (not a rename) so classify_wav() and any
+# other existing code that references YAMNET_MODEL / CLASS_NAMES
+# keeps working unchanged.
+yamnet_model = YAMNET_MODEL
+class_names = CLASS_NAMES
+
+
+def inicialize_model():
+    """Instanciates Yamnet model"""
+    model = hub.load("https://tfhub.dev/google/yamnet/1")
+    return model
+
 
 def load_audio(filepath: str) -> np.ndarray:
     """
