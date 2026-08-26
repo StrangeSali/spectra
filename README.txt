@@ -163,3 +163,11 @@ python main.py
 ## License & Acknowledgments
 
 * **YAMNet Model:** Pre-trained model provided by Google via TensorFlow Hub under the Apache 2.0 License.
+
+
+## Data Setup (Training Only)
+
+If you need to train or re-train the model locally, clone the ESC-50 dataset into the root directory:
+
+```bash
+git clone [https://github.com/karoldvl/ESC-50.git](https://github.com/karoldvl/ESC-50.git)
