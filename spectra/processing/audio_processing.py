@@ -3,20 +3,21 @@ import pandas as pd
 import numpy as np
 import pyaudio
 import threading
+from models.classifier import YAMNET_MODEL
 from spectra.processing.category_mapping import SOUNDS_DICT, DEFAULT_CATEGORY
 
 # --- YAMNET COMPATIBLE CONFIGURATION ---
-SAMPLE_RATE = 16000
-CHUNK_SIZE = 1024
-MAX_QUEUE_SIZE = 10
-CHANNELS = 1
-FORMAT = pyaudio.paFloat32
+
 
 def sound_to_sample(model):
     """
     Worker Thread 1: Handles the microphone hardware stream.
     Captures chunks, scales them, and drops them into the queue.
     """
+    SAMPLE_RATE = 16000
+    CHUNK_SIZE = 1024
+    CHANNELS = 1
+    FORMAT = pyaudio.paFloat32
 
     pa = pyaudio.PyAudio()
 
@@ -74,7 +75,7 @@ import threading
 
 if __name__ == "__main__":
     # Your instantiated model goes here
-    # model = your_model
+    model = YAMNET_MODEL
 
     # 1. Start the classification worker in the background
     classification_thread = threading.Thread(
