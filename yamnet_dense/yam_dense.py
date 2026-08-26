@@ -1,5 +1,2 @@
-from processing_functions import extract_embedding, load_and_preprocess_esc50
+from processing_functions import X_train, X_test, y_train, y_test
 
-
-X_train, X_test, y_train, y_test = load_and_preprocess_esc50(
-    "ESC-50-master")
