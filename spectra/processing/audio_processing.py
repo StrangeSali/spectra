@@ -2,6 +2,7 @@ import sys
 import pandas as pd
 import numpy as np
 import pyaudio
+import threading
 from spectra.processing.category_mapping import SOUNDS_DICT, DEFAULT_CATEGORY
 
 # --- YAMNET COMPATIBLE CONFIGURATION ---
@@ -41,22 +42,47 @@ def sound_to_sample(model):
 
         intensity = np.sqrt(np.mean(normalized ** 2))
 
-        scores, embeddings, spectrogram = model(sample)
+        # Pass the processed data directly into the classification function
+        generate_classification(model, sample)
 
-        mean_scores = scores.numpy().mean(axis=0)
 
-        class_names = pd.read_csv(model.class_map_path().numpy().decode('utf-8'))['display_name'].tolist()
+def generate_classification(model, sample):
+    """
+    Generates the classification output using the processed data.
+    """
+    scores, embeddings, spectrogram = model(sample)
 
-        top_5_classes = np.argpartition(mean_scores, -3)[-3:]
+    mean_scores = scores.numpy().mean(axis=0)
 
-        top_3_dict = {}
-        for idx in top_5_classes:
-            category = SOUNDS_DICT.get(class_names[idx].strip(), DEFAULT_CATEGORY)
-            confidence = float(mean_scores[idx])
+    class_names = pd.read_csv(model.class_map_path().numpy().decode('utf-8'))['display_name'].tolist()
 
-            # Keep the highest confidence if a category repeats
-            if category not in top_3_dict or confidence > top_3_dict[category]:
-                top_3_dict[category] = confidence
+    top_5_classes = np.argpartition(mean_scores, -3)[-3:]
 
-        # 3. Print the resulting dictionary
-        print(top_3_dict)
+    top_3_dict = {}
+    for idx in top_5_classes:
+        category = SOUNDS_DICT.get(class_names[idx].strip(), DEFAULT_CATEGORY)
+        confidence = float(mean_scores[idx])
+
+        # Keep the highest confidence if a category repeats
+        if category not in top_3_dict or confidence > top_3_dict[category]:
+            top_3_dict[category] = confidence
+
+    # 3. Print the resulting dictionary
+    print(top_3_dict)
+
+import threading
+
+if __name__ == "__main__":
+    # Your instantiated model goes here
+    # model = your_model
+
+    # 1. Start the classification worker in the background
+    classification_thread = threading.Thread(
+        target=generate_classification,
+        args=(model,),
+        daemon=True
+    )
+    classification_thread.start()
+
+    # 2. Start the microphone loop in the main thread
+    sound_to_sample()
