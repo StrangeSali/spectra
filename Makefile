@@ -1,5 +1,6 @@
 run_test:
 	python spectra/main.py
 
-run_tl_model:
-	python yamnet_dense/yam_dense.py
+#yamnet_dense
+run_test_train:
+	python yamnet_dense/processing_functions.py
