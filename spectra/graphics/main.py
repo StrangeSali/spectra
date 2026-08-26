@@ -108,7 +108,7 @@ while running:
     )
 
     # 6. Detect audio spike -> expanding ring
-    spike_threshold = 0.15
+    spike_threshold = 0.02
 
     if rms - previous_rms > spike_threshold:
         rings.append({
