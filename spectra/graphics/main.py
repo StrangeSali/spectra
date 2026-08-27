@@ -3,43 +3,63 @@ import random
 import pygame
 
 from spectra.graphics.canvas import draw_circle, draw_polygon
-from spectra.graphics.visualizer import lerp, lerp_color
+from spectra.graphics.visualizer import lerp
 from spectra.models.inference_worker import YAMNetInferenceWorker
-from spectra.models.category_mapping import map_to_category
+from spectra.processing.category_mapping import (
+    aggregate_category_scores,
+    map_audioset_class,
+)
 
 
 SOUND_VISUALS = {
-    "Alert": {
+    "Alarms": {
         "shape": "triangle",
         "color": (255, 50, 80)
     },
+
     "Human": {
         "shape": "circle",
         "color": (255, 180, 50)
     },
-    "Vehicle": {
+
+    "Traffic": {
         "shape": "polygon",
         "color": (50, 150, 255)
     },
-    "Animal": {
-        "shape": "circle",
-        "color": (120, 220, 130)
-    },
+
     "Music": {
         "shape": "polygon",
         "color": (180, 100, 255)
     },
+
     "Background": {
         "shape": "circle",
         "color": (120, 130, 150)
     }
 }
 
+
+DISPLAY_CATEGORIES = {
+    "Alarms",
+    "Human",
+    "Traffic",
+    "Music"
+}
+
+
 SHAPE_POSITIONS = [
     (200, 300),
     (400, 300),
     (600, 300)
 ]
+
+
+MIN_CATEGORY_SCORE = 0.20
+ACTIVE_TIMEOUT_MS = 500
+SILENCE_THRESHOLD = 0.60
+
+DEBUG_INTERVAL_MS = 2000
+
 
 pygame.init()
 
@@ -49,76 +69,106 @@ pygame.display.set_caption("Spectra AI")
 font = pygame.font.Font(None, 32)
 clock = pygame.time.Clock()
 
+
 worker = YAMNetInferenceWorker()
 worker.start()
 
+
 running = True
 
-current_size = 40
-current_color = (255, 255, 255)
-
 previous_rms = 0.0
+
 rings = []
 particles = []
 
-ACTIVE_TIMEOUT_MS = 1500
 active_categories = {}
 
+# Each category keeps its own animation state
+shape_states = {}
+
+last_debug_print = 0
+
+
 while running:
+
+    now = pygame.time.get_ticks()
 
     # 1. Handle window events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-    # 2. Get latest YAMNet predictions
+    # 2. Get latest raw YAMNet predictions
     predictions = worker.get_latest_predictions()
 
-    # DEBUG: show raw YAMNet predictions
-    if predictions:
-        print("\n--- YAMNet Top Predictions ---")
-        for class_name, confidence in predictions:
-            print(f"{class_name}: {confidence:.2f}")
+    # 3. Aggregate raw predictions into Spectra categories
+    category_scores = aggregate_category_scores(
+        predictions
+    )
 
-
-
-    now = pygame.time.get_ticks()
-
-    # Update persistent active categories
-    for class_name, confidence in predictions:
-
-        category = map_to_category(
-            class_name,
-            confidence
+    # Keep only MVP categories and remove weak guesses
+    category_scores = {
+        category: score
+        for category, score in category_scores.items()
+        if (
+            category in DISPLAY_CATEGORIES
+            and score >= MIN_CATEGORY_SCORE
         )
+    }
 
-        if category != "Background":
+    # 4. Detect silence directly
+    silence_score = 0.0
 
-            existing = active_categories.get(category)
+    for class_name, confidence in predictions:
+        if class_name == "Silence":
+            silence_score = confidence
+            break
 
-            if (
-                existing is None
-                or confidence >= existing["confidence"]
-            ):
-                active_categories[category] = {
-                    "class_name": class_name,
-                    "confidence": confidence,
-                    "last_seen": now
-                }
+    is_silent = (
+        silence_score >= SILENCE_THRESHOLD
+        and not category_scores
+    )
 
-            else:
-                # Category is still being detected:
-                # keep it alive even if this specific class has lower confidence
-                existing["last_seen"] = now
+    # 5. Update persistent active categories
+    for category, score in category_scores.items():
 
-    # Remove categories that have not been seen recently
+        matching_predictions = [
+            (class_name, confidence)
+            for class_name, confidence in predictions
+            if map_audioset_class(class_name) == category
+        ]
+
+        if matching_predictions:
+            best_class_name, best_class_confidence = max(
+                matching_predictions,
+                key=lambda item: item[1]
+            )
+        else:
+            best_class_name = category
+
+        existing = active_categories.get(category)
+
+        if (
+            existing is None
+            or score >= existing["confidence"]
+        ):
+            active_categories[category] = {
+                "class_name": best_class_name,
+                "confidence": score,
+                "last_seen": now
+            }
+
+        else:
+            existing["last_seen"] = now
+
+    # 6. Remove stale categories
     active_categories = {
         category: data
         for category, data in active_categories.items()
         if now - data["last_seen"] < ACTIVE_TIMEOUT_MS
     }
 
-    # Convert persistent category memory into drawable sounds
+    # 7. Build drawable sounds
     active_sounds = [
         {
             "category": category,
@@ -128,66 +178,128 @@ while running:
         for category, data in active_categories.items()
     ]
 
-    # Strongest categories first
     active_sounds.sort(
         key=lambda sound: sound["confidence"],
         reverse=True
     )
 
-    # Maximum 3 simultaneous visuals
     active_sounds = active_sounds[:3]
 
-    # 3. Get global audio energy
+    # 8. Background fallback
+    if not active_sounds:
+        active_sounds = [{
+            "category": "Background",
+            "class_name": "Silence" if is_silent else "Background",
+            "confidence": silence_score if is_silent else 0.0
+        }]
+
+    # 9. Debug every 2 seconds
+    if now - last_debug_print >= DEBUG_INTERVAL_MS:
+
+        print("\n--- DEBUG ---")
+        print("RAW:", predictions)
+        print("CATEGORY SCORES:", category_scores)
+        print("ACTIVE SOUNDS:", active_sounds)
+        print("SILENCE SCORE:", silence_score)
+
+        last_debug_print = now
+
+    # 10. Global audio energy
     rms = worker.get_rms()
 
-    # RMS controls overall scene energy / size
-    target_size = 30 + rms * 150
-
-    current_size = lerp(
-        current_size,
-        target_size,
-        0.1
-    )
-
-    # 4. Detect audio spike -> expanding ring
+    # 11. Detect audio spike -> expanding ring
     spike_threshold = 0.02
 
     if rms - previous_rms > spike_threshold:
-        rings.append({
-            "radius": int(current_size),
-            "alpha": 255
-        })
+
+        for index, sound in enumerate(active_sounds):
+
+            if sound["category"] == "Background":
+                continue
+
+            x, y = SHAPE_POSITIONS[index]
+
+            rings.append({
+                "x": x,
+                "y": y,
+                "radius": 40,
+                "alpha": 255,
+                "color": SOUND_VISUALS[
+                    sound["category"]
+                ]["color"]
+            })
 
     previous_rms = rms
 
-    # 5. Add subtle particles when sound is active
+    # 12. Create particles around active shapes
     if rms > 0.05:
-        angle = random.uniform(0, 2 * math.pi)
-        speed = random.uniform(0.5, 2.0)
 
-        particles.append({
-            "x": 400,
-            "y": 300,
-            "vx": math.cos(angle) * speed,
-            "vy": math.sin(angle) * speed,
-            "life": 60
-        })
+        for index, sound in enumerate(active_sounds):
 
-    # 6. Clear screen
-    screen.fill((8, 10, 25))
+            category = sound["category"]
 
-    # 7. Persistent listening waveform
+            if category == "Background":
+                continue
+
+            x, y = SHAPE_POSITIONS[index]
+
+            angle = random.uniform(
+                0,
+                2 * math.pi
+            )
+
+            speed = random.uniform(
+                0.5,
+                2.0
+            )
+
+            particles.append({
+                "x": x,
+                "y": y,
+                "vx": math.cos(angle) * speed,
+                "vy": math.sin(angle) * speed,
+                "life": 60,
+                "color": SOUND_VISUALS[
+                    category
+                ]["color"]
+            })
+
+    # 13. Clear screen
+    screen.fill(
+        (8, 10, 25)
+    )
+
+    # 14. Persistent listening waveform
     wave_points = []
 
-    time_offset = pygame.time.get_ticks() * 0.003
-    wave_amplitude = 10 + rms * 40
+    time_offset = (
+        pygame.time.get_ticks()
+        * 0.003
+    )
 
-    for x in range(0, 800, 8):
-        y = 500 + math.sin(
-            x * 0.03 + time_offset
-        ) * wave_amplitude
+    wave_amplitude = (
+        10
+        + rms * 40
+    )
 
-        wave_points.append((x, int(y)))
+    for x in range(
+        0,
+        800,
+        8
+    ):
+
+        y = (
+            500
+            + math.sin(
+                x * 0.03
+                + time_offset
+            )
+            * wave_amplitude
+        )
+
+        wave_points.append(
+            (x, int(y))
+        )
 
     pygame.draw.lines(
         screen,
@@ -197,12 +309,21 @@ while running:
         2
     )
 
-    # 8. Draw up to 3 active sounds
-    for index, sound in enumerate(active_sounds):
+    # 15. Draw active sounds
+    for index, sound in enumerate(
+        active_sounds
+    ):
 
-        class_name = sound["class_name"]
         category = sound["category"]
-        confidence = sound["confidence"]
+        class_name = sound["class_name"]
+
+        confidence = max(
+            0.0,
+            min(
+                sound["confidence"],
+                1.0
+            )
+        )
 
         visual = SOUND_VISUALS.get(
             category,
@@ -212,10 +333,54 @@ while running:
         shape = visual["shape"]
         color = visual["color"]
 
-        x, y = SHAPE_POSITIONS[index]
+        if category == "Background":
+            x, y = (400, 300)
+        else:
+            x, y = SHAPE_POSITIONS[index]
 
-        # Confidence controls opacity
-        alpha = int(80 + confidence * 175)
+        # Create per-category animation state
+        if category not in shape_states:
+            shape_states[category] = {
+                "size": 30.0,
+                "alpha": 60.0
+            }
+
+        state = shape_states[category]
+
+        # Stronger confidence = bigger + more opaque
+        if category == "Background":
+            target_size = 45
+            target_alpha = 130
+        else:
+            target_size = 35 + confidence * 90
+            target_alpha = 50 + confidence * 205
+
+        # Smoothly animate toward target
+        state["size"] = lerp(
+            state["size"],
+            target_size,
+            0.15
+        )
+
+        state["alpha"] = lerp(
+            state["alpha"],
+            target_alpha,
+            0.15
+        )
+
+        size = int(
+            state["size"]
+        )
+
+        alpha = int(
+            max(
+                0,
+                min(
+                    state["alpha"],
+                    255
+                )
+            )
+        )
 
         rgba_color = (
             *color,
@@ -226,8 +391,6 @@ while running:
             (800, 600),
             pygame.SRCALPHA
         )
-
-        size = int(current_size)
 
         if shape == "circle":
 
@@ -272,7 +435,7 @@ while running:
             (0, 0)
         )
 
-    # 9. Draw expanding rings
+    # 16. Draw expanding rings
     for ring in rings:
 
         ring["radius"] += 4
@@ -288,12 +451,13 @@ while running:
             pygame.draw.circle(
                 ring_surface,
                 (
-                    150,
-                    170,
-                    220,
+                    *ring["color"],
                     ring["alpha"]
                 ),
-                (400, 300),
+                (
+                    ring["x"],
+                    ring["y"]
+                ),
                 ring["radius"],
                 width=3
             )
@@ -309,7 +473,7 @@ while running:
         if ring["alpha"] > 0
     ]
 
-    # 10. Draw particles
+    # 17. Draw particles
     for particle in particles:
 
         particle["x"] += particle["vx"]
@@ -318,12 +482,12 @@ while running:
 
         pygame.draw.circle(
             screen,
-            (150, 170, 220),
+            particle["color"],
             (
                 int(particle["x"]),
                 int(particle["y"])
             ),
-            3
+            5
         )
 
     particles = [
@@ -332,26 +496,54 @@ while running:
         if particle["life"] > 0
     ]
 
-    # 11. HUD
+    # 18. HUD
     fps = clock.get_fps()
 
-    for index, sound in enumerate(active_sounds):
+    for index, sound in enumerate(
+        active_sounds
+    ):
 
         category = sound["category"]
         class_name = sound["class_name"]
-        confidence = sound["confidence"]
+
+        confidence = max(
+            0.0,
+            min(
+                sound["confidence"],
+                1.0
+            )
+        )
 
         color = SOUND_VISUALS[category]["color"]
 
+        if category == "Background":
+
+            if class_name == "Silence":
+                label = (
+                    f"Background: Silence "
+                    f"({confidence * 100:.1f}%)"
+                )
+            else:
+                label = "Background: Listening"
+
+        else:
+            label = (
+                f"{category}: {class_name} "
+                f"({confidence * 100:.1f}%)"
+            )
+
         sound_text = font.render(
-            f"{category}: {class_name} ({confidence * 100:.1f}%)",
+            label,
             True,
             color
         )
 
         screen.blit(
             sound_text,
-            (20, 20 + index * 35)
+            (
+                20,
+                20 + index * 35
+            )
         )
 
     fps_text = font.render(
@@ -365,10 +557,10 @@ while running:
         (20, 130)
     )
 
-    # 12. Update display
+    # 19. Update display
     pygame.display.flip()
 
-    # 13. Limit frame rate
+    # 20. Limit frame rate
     clock.tick(60)
 
 

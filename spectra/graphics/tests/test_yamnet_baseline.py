@@ -1,5 +1,6 @@
 from spectra.models.classifier import classify_wav
-from spectra.models.category_mapping import map_to_category
+from spectra.processing.category_mapping import map_to_category
+from spectra.processing.category_mapping import get_top_category
 
 
 def test_clapping_baseline():
@@ -19,12 +20,9 @@ def test_clapping_baseline():
         )
 
     # Take YAMNet's strongest prediction
-    class_name, confidence = predictions[0]
-
-    predicted_category = map_to_category(
-        class_name,
-        confidence
-    )
+    predicted_category = get_top_category(
+    predictions
+)
 
     print(
         f"Expected: Human | "

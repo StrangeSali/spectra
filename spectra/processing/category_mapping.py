@@ -5,23 +5,29 @@
 import re
 
 CATEGORY_KEYWORDS = {
-    "Alert": [
+    "Alarms": [
         "Siren", "Alarm", "Emergency", "Smoke detector", "Fire alarm",
         "Civil defense", "Buzzer", "Gunshot", "Explosion"
     ],
     "Human": [
         "Speech", "Conversation", "Shout", "Yell", "Cry", "Sob",
         "Laughter", "Laugh", "Clapping", "Applause", "Cough",
-        "Sneeze", "Footsteps", "Baby", "Child"
+        "Sneeze", "Footsteps", "Baby", "Child","Hands", "Finger snapping",
+        "Clapping", "Cheering", "Applause"
     ],
     "Animal": [
         "Dog", "Cat", "Bird", "Animal", "Bark", "Meow", "Roar",
         "Growl", "Insect", "Livestock", "Horse", "Cattle"
     ],
-    "Vehicle": [
+    "Traffic": [
         "Car", "Vehicle", "Engine", "Traffic", "Motor", "Truck",
         "Bus", "Train", "Motorcycle", "Horn", "Honk", "Aircraft"
     ],
+    "Nature": [
+            "Wind", "Rustling leaves", "Wind noise (microphone)", "Thunderstorm", "Thunder", "Water",
+            "Rain", "Raindrop", "Rain on surface", "Stream", "Waterfall", "Ocean", "Waves, surf",
+            "Steam", "Gurgling", "Fire", "Crackle", "Eruption"
+        ],
     "Music": [
         "Music", "Musical instrument", "Singing", "Guitar", "Piano",
         "Drum", "Violin"
@@ -42,7 +48,7 @@ audioset_mapping = {
         "Heart murmur", "Cheering", "Applause", "Chatter", "Crowd", "Hubbub, speech noise, speech babble",
         "Children playing"
     ],
-    "Sirens/Alarms": [
+    "Alarms": [
         "Alarm", "Telephone", "Telephone bell ringing", "Ringtone", "Telephone dialing, DTMF",
         "Dial tone", "Busy signal", "Alarm clock", "Siren", "Civil defense siren", "Buzzer",
         "Smoke detector, smoke alarm", "Fire alarm", "Foghorn", "Whistle", "Steam whistle",
@@ -59,7 +65,7 @@ audioset_mapping = {
         "Subway, metro, underground", "Aircraft", "Aircraft engine", "Jet engine", "Propeller, airscrew",
         "Helicopter", "Fixed-wing aircraft, airplane", "Bicycle", "Skateboard"
     ],
-    "Animals": [
+    "Animal": [
         "Animal", "Domestic animals, pets", "Dog", "Bark", "Yip", "Howl", "Bow-wow", "Growling",
         "Whimper (dog)", "Cat", "Purr", "Meow", "Hiss", "Caterwaul", "Livestock, farm animals, working animals",
         "Horse", "Clip-clop", "Neigh, whinny", "Cattle, bovinae", "Moo", "Cowbell", "Pig", "Oink",
@@ -111,6 +117,7 @@ for category in audioset_mapping.keys():
     for sound in values:
         SOUNDS_DICT.update({sound:category})
 
+
 DEFAULT_CATEGORY = "Background"
 
 def _match_category(class_name: str) -> str:
@@ -123,8 +130,9 @@ def _match_category(class_name: str) -> str:
 
     for category, keywords in CATEGORY_KEYWORDS.items():
         for keyword in keywords:
+            keyword_lower = keyword.lower()
             # \b enforces word boundaries, so "bus" won't match inside "busy"
-            pattern = r'\b' + re.escape(keyword) + r'\b'
+            pattern = r'\b' + re.escape(keyword_lower) + r'\b'
             if re.search(pattern, class_name_lower):
                 return category
 
@@ -172,6 +180,50 @@ def map_to_category_smooth(
         return DEFAULT_CATEGORY
 
     return current_category
+
+def map_audioset_class(class_name: str) -> str:
+    """
+    Map an exact YAMNet / AudioSet class
+    to a Spectra category.
+    """
+    return SOUNDS_DICT.get(
+        class_name,
+        DEFAULT_CATEGORY
+    )
+
+def aggregate_category_scores(predictions):
+
+    category_scores = {}
+
+    for class_name, confidence in predictions:
+
+        category = map_audioset_class(
+            class_name
+        )
+
+        if category == DEFAULT_CATEGORY:
+            continue
+
+        category_scores[category] = (
+            category_scores.get(category, 0.0)
+            + confidence
+        )
+
+    return category_scores
+
+def get_top_category(predictions):
+
+    scores = aggregate_category_scores(
+        predictions
+    )
+
+    if not scores:
+        return DEFAULT_CATEGORY
+
+    return max(
+        scores,
+        key=scores.get
+    )
 
 
 # test!
