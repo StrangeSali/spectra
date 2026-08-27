@@ -1,6 +1,6 @@
-run_test:
-	python spectra/main.py
+run_main:
+	AUDIO_SOURCE=mic python spectra/main.py
 
-#yamnet_dense
-run_test_train:
-	python yamnet_dense/processing_functions.py
+FILE ?= raw_data/test_tone.wav
+run_file:
+	AUDIO_SOURCE=file AUDIO_FILE=$(FILE) python spectra/main.py
