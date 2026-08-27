@@ -7,11 +7,9 @@ from processing.categories import (
 )
 
 
-def predict_sound(
+def predict_probabilities(
     embedding,
-    classifier_model,
-    max_classes=3,
-    confidence_threshold=0.20
+    classifier_model
 ):
 
     probabilities = classifier_model.predict(
@@ -19,16 +17,27 @@ def predict_sound(
         verbose=0
     )[0]
 
-    # Get indices of the top predictions
-    top_indices = np.argsort(probabilities)[::-1][:max_classes]
+    return probabilities
+
+
+def predict_sound(
+    probabilities,
+    max_classes=3,
+    confidence_threshold=0.20
+):
+
+    top_indices = np.argsort(
+        probabilities
+    )[::-1][:max_classes]
 
     results = []
 
     for idx in top_indices:
 
-        confidence = float(probabilities[idx])
+        confidence = float(
+            probabilities[idx]
+        )
 
-        # Ignore predictions below the threshold
         if confidence < confidence_threshold:
             continue
 
@@ -41,7 +50,10 @@ def predict_sound(
 
         results.append({
             "class_name": category,
-            "confidence": round(confidence, 2)
+            "confidence": round(
+                confidence,
+                2
+            )
         })
 
     return results
