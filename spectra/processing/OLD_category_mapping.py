@@ -224,6 +224,12 @@ def get_top_category(predictions):
         scores,
         key=scores.get
     )
+import numpy as np
+
+from spectra.processing.OLD_category_mapping import (
+    SOUNDS_DICT,
+    DEFAULT_CATEGORY
+)
 
 
 # test!
