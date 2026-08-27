@@ -7,8 +7,16 @@ import tensorflow_hub as hub
 import pandas as pd
 import soundfile as sf
 
-model = inicialize_model()
+#Load model
 
-#Open mic, process sound and return classification
-sound_to_sample(model)
--
+
+
+#Open mic and collect data or upload a sound clip
+
+
+
+# Extract embedding
+
+
+
+# Generate predictions
