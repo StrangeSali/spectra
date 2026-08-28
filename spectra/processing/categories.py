@@ -57,7 +57,7 @@ ESC50_CLASSES = [
 
 
 ESC50_CATEGORIES = {
-    "Clapping": ["clapping", "door_knock","hand_saw", "brushing_teeth", "chainsaw",],
+    "Clapping": ["clapping", "door_knock","hand_saw", "brushing_teeth", "chainsaw"],
 
     "Human": [
         "crying_baby",
@@ -112,7 +112,6 @@ ESC50_CATEGORIES = {
 
     "Vehicle": [
         "helicopter",
-
         "car_horn",
         "engine",
         "train",
