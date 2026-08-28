@@ -1,6 +1,6 @@
 import numpy as np
 
-from processing.categories import (
+from .categories import (
     ESC50_CLASSES,
     SOUNDS_DICT,
     DEFAULT_CATEGORY
@@ -40,6 +40,8 @@ def predict_sound(
 
         if confidence < confidence_threshold:
             continue
+
+       
 
         esc50_class = ESC50_CLASSES[idx]
 

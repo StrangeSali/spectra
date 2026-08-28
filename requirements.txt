@@ -122,3 +122,7 @@ webencodings==0.6.1
 websocket-client==1.9.0
 wheel==0.48.0
 wrapt==2.3.0
+fastapi
+uvicorn
+python-multipart
+python-dotenv
