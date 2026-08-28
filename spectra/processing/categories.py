@@ -49,12 +49,15 @@ ESC50_CLASSES = [
     "church_bells",
     "airplane",
     "fireworks",
-    "hand_saw"
+    "hand_saw",
+    "footsteps",
+    "laughing",
+    "brushing_teeth"
 ]
 
 
 ESC50_CATEGORIES = {
-    "Clapping": ["clapping", "door_knock","hand_saw"],
+    "Clapping": ["clapping", "door_knock","hand_saw", "brushing_teeth", "chainsaw",],
 
     "Human": [
         "crying_baby",
@@ -71,6 +74,8 @@ ESC50_CATEGORIES = {
         "clock_alarm",
         "clock_tick",
         "church_bells",
+        "laughing"
+        "footsteps"
     ],
 
     "Animal": [
@@ -107,7 +112,7 @@ ESC50_CATEGORIES = {
 
     "Vehicle": [
         "helicopter",
-        "chainsaw",
+
         "car_horn",
         "engine",
         "train",
