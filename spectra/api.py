@@ -64,6 +64,7 @@ def root():
 
 @app.post("/predict")
 async def predict_audio(file: UploadFile = File(...)):
+
     if classifier_model is None:
         raise HTTPException(
             status_code=500,
@@ -92,7 +93,7 @@ async def predict_audio(file: UploadFile = File(...)):
             probabilities = predict_probabilities(embedding, classifier_model)
             all_probabilities.append(probabilities)
 
-      
+
         mean_probabilities = np.array(all_probabilities).mean(axis=0)
         results = predict_sound(
             mean_probabilities,
