@@ -3,8 +3,13 @@ import time
 from collections import deque, Counter
 import numpy as np
 import pyaudio
+<<<<<<< HEAD:spectra/models/inference_worker.py
 from spectra.models.classifier import YAMNET_MODEL, CLASS_NAMES
 from spectra.processing.category_mapping import map_to_category_smooth, DEFAULT_CATEGORY
+=======
+from models.classifier import yamnet_model, class_names
+from spectra.models.category_mapping import map_to_category_smooth, DEFAULT_CATEGORY
+>>>>>>> d2add0503332544e3c2c4e72713fc013b059cc84:clean_up/inference_worker.py
 
 # --- YAMNET COMPATIBLE CONFIGURATION ---
 SAMPLE_RATE = 16000

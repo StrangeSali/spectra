@@ -3,7 +3,7 @@ import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 
 import tensorflow as tf
-from processing_functions import X_train, X_test, y_train, y_test
+from spectra.models.yamnet_dense.processing_functions import X_train, X_test, y_train, y_test
 from tf_keras import layers, models, callbacks
 import tensorflow_hub as hub
 

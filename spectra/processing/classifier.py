@@ -23,8 +23,10 @@ def predict_probabilities(
 def predict_sound(
     probabilities,
     max_classes=3,
-    confidence_threshold=0.20
+    confidence_threshold=0.0
 ):
+
+
 
     top_indices = np.argsort(
         probabilities
@@ -45,13 +47,18 @@ def predict_sound(
 
         esc50_class = ESC50_CLASSES[idx]
 
-        category = SOUNDS_DICT.get(
-            esc50_class,
-            DEFAULT_CATEGORY
-        )
+        #if confidence < confidence_threshold:
+        #    print("Low confidence for ", esc50_class)
+        #    continue
+
+
+
+
+
+
 
         results.append({
-            "class_name": category,
+            "class_name": esc50_class,
             "confidence": round(
                 confidence,
                 2
