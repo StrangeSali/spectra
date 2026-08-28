@@ -6,18 +6,19 @@ import tensorflow_hub as hub
 from tf_keras.models import load_model
 from google.cloud import storage
 
-from processing.audio import (
+
+from spectra.processing.audio import (
     capture_audio_chunk,
     load_audio_file,
     split_audio_into_windows,
     preprocess_audio
 )
 
-from processing.yamnet_utils import (
+from spectra.processing.yamnet_utils import (
     extract_features
 )
 
-from processing.classifier import (
+from spectra.processing.classifier import (
     predict_probabilities,
     predict_sound
 )
@@ -107,7 +108,7 @@ def process_waveform(waveform):
         classifier_model
     )
 
-    return probabilities
+    return probabilities, rms
 
 
 # --------------------------------------------------
@@ -124,7 +125,7 @@ def process_microphone(
         chunk_size
     )
 
-    probabilities = process_waveform(
+    probabilities, rms = process_waveform(
         waveform
     )
 
@@ -132,7 +133,7 @@ def process_microphone(
         probabilities
     )
 
-    return result
+    return result, rms
 
 
 # --------------------------------------------------
@@ -143,12 +144,26 @@ def run_microphone(mic):
 
     while True:
 
-        result = process_microphone(
+        predictions, rms = process_microphone(
             mic
         )
 
+        print("Predictions:", predictions)
+        print("RMS:", float(rms))
+
+        for item in predictions:
+            for key, value in item.items():
+                print(
+                    key,
+                    value,
+                    type(value)
+                    )
+
         print(
-            json.dumps(result)
+            json.dumps({
+                "predictions": predictions,
+                "rms": float(rms)
+                })
         )
 
 

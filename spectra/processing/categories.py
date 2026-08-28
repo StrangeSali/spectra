@@ -74,7 +74,7 @@ ESC50_CATEGORIES = {
         "clock_alarm",
         "clock_tick",
         "church_bells",
-        "laughing"
+        "laughing",
         "footsteps"
     ],
 
@@ -112,7 +112,6 @@ ESC50_CATEGORIES = {
 
     "Vehicle": [
         "helicopter",
-
         "car_horn",
         "engine",
         "train",

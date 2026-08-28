@@ -1,6 +1,6 @@
 import numpy as np
 
-from processing.categories import (
+from spectra.processing.categories import (
     ESC50_CLASSES,
     SOUNDS_DICT,
     DEFAULT_CATEGORY
