@@ -3,7 +3,7 @@ import time
 from collections import deque, Counter
 import numpy as np
 import pyaudio
-from spectra.models.classifier import yamnet_model, class_names
+from models.classifier import yamnet_model, class_names
 from spectra.models.category_mapping import map_to_category_smooth, DEFAULT_CATEGORY
 
 # --- YAMNET COMPATIBLE CONFIGURATION ---

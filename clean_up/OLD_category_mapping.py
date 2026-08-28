@@ -175,7 +175,7 @@ def map_to_category_smooth(
 
 import numpy as np
 
-from spectra.processing.OLD_category_mapping import (
+from models.OLD_category_mapping import (
     SOUNDS_DICT,
     DEFAULT_CATEGORY
 )
