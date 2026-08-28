@@ -4,8 +4,10 @@ import numpy as np
 import tensorflow_hub as hub
 from tf_keras.models import load_model
 from google.cloud import storage
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
+import asyncio
+
 
 # Cargar variables del archivo .env
 load_dotenv()
@@ -112,3 +114,65 @@ async def predict_audio(file: UploadFile = File(...)):
     finally:
         if 'tmp_path' in locals() and os.path.exists(tmp_path):
             os.remove(tmp_path)
+
+# --------------------------------------------------
+# WebSocket: real-time microphone predictions
+# --------------------------------------------------
+@app.websocket("/predict-mic")
+async def websocket_predict_mic(websocket: WebSocket):
+    """
+    Accepts a live stream of raw Float32 audio bytes from a client microphone,
+    processes chunks via YAMNet, and returns live predictions.
+    """
+    if classifier_model is None:
+        await websocket.close(code=1011, reason="Model file not loaded on server.")
+        return
+
+    await websocket.accept()
+    print("Client connected to real-time audio stream via WebSocket.")
+
+    try:
+        while True:
+            # Receive raw binary data sent from the client's microphone
+            data = await websocket.receive_bytes()
+
+            if not data:
+                continue
+
+            # Convert raw bytes directly to a Float32 numpy array
+            waveform = np.frombuffer(data, dtype=np.float32)
+
+            if len(waveform) == 0:
+                continue
+
+            # Process the audio chunk exactly like a single window
+            processed_chunk, _ = preprocess_audio(waveform)
+
+            # Extract features via YAMNet
+            _, embedding = extract_features(yamnet_model, processed_chunk)
+
+            # Classify features using your dense model
+            probabilities = predict_probabilities(embedding, classifier_model)
+
+            # Extract names & weights of top sounds
+            results = predict_sound(
+                probabilities,
+                max_classes=3,
+                confidence_threshold=0.20
+            )
+
+            # Push predictions back to the client immediately
+            await websocket.send_json({
+                "status": "processing",
+                "predictions": results
+            })
+
+    except WebSocketDisconnect:
+        print("Microphone stream client disconnected.")
+
+    except Exception as e:
+        print(f"Error handling WebSocket stream: {str(e)}")
+        try:
+            await websocket.send_json({"status": "error", "detail": str(e)})
+        except:
+            pass  # Connection might already be broken
