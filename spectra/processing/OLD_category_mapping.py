@@ -173,6 +173,13 @@ def map_to_category_smooth(
 
     return current_category
 
+import numpy as np
+
+from spectra.processing.OLD_category_mapping import (
+    SOUNDS_DICT,
+    DEFAULT_CATEGORY
+)
+
 
 # test!
 if __name__ == "__main__":
