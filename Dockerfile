@@ -9,4 +9,6 @@ COPY spectra spectra
 COPY setup.py setup.py
 RUN pip install .
 
+RUN python -c "import tensorflow_hub as hub; hub.load('https://tfhub.dev/google/yamnet/1')"
+
 CMD ["sh", "-c", "uvicorn spectra.api:app --host 0.0.0.0 --port ${PORT:-8080}"]
