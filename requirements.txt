@@ -105,6 +105,8 @@ sounddevice==0.5.6
 soundfile==0.14.0
 soupsieve==2.9.2
 stack-data==0.6.3
+streamlit==1.62.0
+streamlit-webrtc==0.77.0
 tqdm
 tensorflow==2.21.0
 tensorflow-hub==0.16.1

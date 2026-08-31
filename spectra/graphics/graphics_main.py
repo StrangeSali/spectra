@@ -27,12 +27,17 @@ SCREEN_HEIGHT = 600
 
 SOUND_VISUALS = {
     "Alert": {
-        "shape": "triangle",
+        "shape": "alarm",
         "color": (255, 50, 80),
     },
 
-    "Human": {
+    "Clapping": {
         "shape": "clapping_hands",
+        "color": (255, 180, 50),
+    },
+
+    "Human": {
+        "shape": "talking",
         "color": (255, 180, 50),
     },
 
@@ -41,9 +46,14 @@ SOUND_VISUALS = {
         "color": (50, 150, 255),
     },
 
-    "Music": {
-        "shape": "polygon",
-        "color": (180, 100, 255),
+    "Animal": {
+        "shape": "animal",
+        "color": (120, 220, 130),
+    },
+
+    "Nature": {
+        "shape": "nature",
+        "color": (80, 210, 180),
     },
 
     "Background": {
@@ -131,6 +141,21 @@ CAR_IMAGE = pygame.image.load(
     "spectra/graphics/assets/car.png"
 ).convert_alpha()
 
+ALARM_IMAGE = pygame.image.load(
+    "spectra/graphics/assets/alarm.png"
+).convert_alpha()
+
+ANIMAL_IMAGE = pygame.image.load(
+    "spectra/graphics/assets/animal.png"
+).convert_alpha()
+
+NATURE_IMAGE = pygame.image.load(
+    "spectra/graphics/assets/nature.png"
+).convert_alpha()
+
+TALKING_IMAGE = pygame.image.load(
+    "spectra/graphics/assets/talking.png"
+).convert_alpha()
 
 # ==================================================
 # BACKGROUND OVERLAY
@@ -365,14 +390,14 @@ while running:
         },
 
         {
-            "category": "Human",
-            "display_label": "Clapping",
+            "category": "Nature",
+            "display_label": "forest",
             "confidence": 0.90,
         },
 
         {
-            "category": "Vehicle",
-            "display_label": "Car",
+            "category": "Animal",
+            "display_label": "Cat",
             "confidence": 0.75,
         },
     ]
@@ -955,6 +980,49 @@ while running:
                 confidence,
             )
 
+        elif shape == "alarm":
+            draw_floating_icon(
+            shape_surface,
+            ALARM_IMAGE,
+            (x, y),
+            size,
+            color,
+            alpha,
+            confidence,
+            )
+
+        elif shape == "animal":
+            draw_floating_icon(
+            shape_surface,
+            ANIMAL_IMAGE,
+            (x, y),
+            size,
+            color,
+            alpha,
+            confidence,
+            )
+
+        elif shape == "nature":
+            draw_floating_icon(
+            shape_surface,
+            NATURE_IMAGE,
+            (x, y),
+            size,
+            color,
+            alpha,
+            confidence,
+            )
+
+        elif shape == "talking":
+            draw_floating_icon(
+            shape_surface,
+            TALKING_IMAGE,
+            (x, y),
+            size,
+            color,
+            alpha,
+            confidence,
+            )
 
         screen.blit(
             shape_surface,
