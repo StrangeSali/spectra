@@ -17,11 +17,16 @@ async def stream_mic():
         frames_per_buffer=CHUNK
     )
 
-    async with websockets.connect("ws://localhost:8000/predict-mic") as ws:
+    # Use 127.0.0.1 explicitly to avoid IPv6/IPv4 lookup confusion
+    async with websockets.connect("ws://127.0.0.1:8000/predict-mic") as ws:
         print("Streaming mic audio... Ctrl+C to stop")
         try:
             while True:
-                data = stream.read(CHUNK, exception_on_overflow=False)
+                # CRITICAL FIX: Run the blocking PyAudio read in a separate thread
+                data = await asyncio.to_thread(
+                    stream.read, CHUNK, exception_on_overflow=False
+                )
+
                 await ws.send(data)
                 response = await ws.recv()
                 print(json.loads(response))
@@ -32,4 +37,7 @@ async def stream_mic():
             stream.close()
             audio.terminate()
 
-asyncio.run(stream_mic())
+try:
+    asyncio.run(stream_mic())
+except KeyboardInterrupt:
+    pass
