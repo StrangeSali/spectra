@@ -1,16 +1,13 @@
 import math
 import random
+import statistics
 
 import pygame
 import pyaudio
 
-from spectra.graphics.canvas import (
-    draw_circle,
-    draw_polygon,
-)
-
+from spectra.graphics.canvas import draw_circle
 from spectra.graphics.visualizer import lerp
-#from spectra.main import process_microphone
+from spectra.main import process_microphone
 
 
 # ==================================================
@@ -20,12 +17,56 @@ from spectra.graphics.visualizer import lerp
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 
+FPS = 60
+
+
+# ==================================================
+# PREDICTION CONFIGURATION
+# ==================================================
+
+# Model refresh rate.
+PREDICTION_INTERVAL_MS = 1500
+
+
+# --------------------------------------------------
+# AUTOMATIC BACKGROUND CALIBRATION
+# --------------------------------------------------
+
+# Spectra listens to a few initial samples to learn
+# the normal RMS level of the microphone / room.
+CALIBRATION_SAMPLES = 5
+
+
+# Minimum possible quiet threshold.
+ABSOLUTE_MIN_RMS = 0.0025
+
+
+# A sound must rise sufficiently above the learned
+# background noise floor before we classify it.
+NOISE_MULTIPLIER = 1.35
+
+
+# Small extra margin above the noise floor.
+NOISE_MARGIN = 0.0005
+
+
+# --------------------------------------------------
+# DISPLAY CONFIDENCE
+# --------------------------------------------------
+
+MIN_DISPLAY_CONFIDENCE = 0.20
+
+SECONDARY_CONFIDENCE_THRESHOLD = 0.40
+
+MAX_DISPLAYED_SOUNDS = 3
+
 
 # ==================================================
 # VISUAL CONFIGURATION
 # ==================================================
 
 SOUND_VISUALS = {
+
     "Alert": {
         "shape": "alarm",
         "color": (255, 50, 80),
@@ -63,10 +104,6 @@ SOUND_VISUALS = {
 }
 
 
-# ==================================================
-# ICON POSITIONS
-# ==================================================
-
 SHAPE_POSITIONS = [
     (180, 345),
     (400, 345),
@@ -81,7 +118,10 @@ SHAPE_POSITIONS = [
 pygame.init()
 
 screen = pygame.display.set_mode(
-    (SCREEN_WIDTH, SCREEN_HEIGHT)
+    (
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+    )
 )
 
 pygame.display.set_caption(
@@ -95,26 +135,50 @@ clock = pygame.time.Clock()
 # FONTS
 # ==================================================
 
-title_font = pygame.font.Font(None, 40)
-subtitle_font = pygame.font.Font(None, 23)
+title_font = pygame.font.Font(
+    None,
+    40,
+)
 
-confidence_font = pygame.font.Font(None, 40)
-confidence_label_font = pygame.font.Font(None, 18)
+subtitle_font = pygame.font.Font(
+    None,
+    23,
+)
 
-sound_name_font = pygame.font.Font(None, 30)
-category_font = pygame.font.Font(None, 21)
+confidence_font = pygame.font.Font(
+    None,
+    40,
+)
 
-small_font = pygame.font.Font(None, 22)
-rms_font = pygame.font.Font(None, 34)
+confidence_label_font = pygame.font.Font(
+    None,
+    18,
+)
+
+sound_name_font = pygame.font.Font(
+    None,
+    30,
+)
+
+category_font = pygame.font.Font(
+    None,
+    21,
+)
+
+small_font = pygame.font.Font(
+    None,
+    22,
+)
+
+rms_font = pygame.font.Font(
+    None,
+    34,
+)
 
 
 # ==================================================
 # ASSETS
 # ==================================================
-
-# --------------------------------------------------
-# Background
-# --------------------------------------------------
 
 BACKGROUND_IMAGE = pygame.image.load(
     "spectra/graphics/assets/spectra-background.png"
@@ -124,50 +188,82 @@ BACKGROUND_IMAGE = pygame.transform.smoothscale(
     BACKGROUND_IMAGE,
     (
         SCREEN_WIDTH,
-        240
-    )
+        240,
+    ),
 )
 
-
-# --------------------------------------------------
-# Transparent PNG icons
-# --------------------------------------------------
 
 CLAPPING_HANDS_IMAGE = pygame.image.load(
     "spectra/graphics/assets/clapping-hands.png"
 ).convert_alpha()
 
+
 CAR_IMAGE = pygame.image.load(
     "spectra/graphics/assets/car.png"
 ).convert_alpha()
+
 
 ALARM_IMAGE = pygame.image.load(
     "spectra/graphics/assets/alarm.png"
 ).convert_alpha()
 
+
 ANIMAL_IMAGE = pygame.image.load(
     "spectra/graphics/assets/animal.png"
 ).convert_alpha()
+
 
 NATURE_IMAGE = pygame.image.load(
     "spectra/graphics/assets/nature.png"
 ).convert_alpha()
 
+
 TALKING_IMAGE = pygame.image.load(
     "spectra/graphics/assets/talking.png"
 ).convert_alpha()
+
+
+ICON_IMAGES = {
+
+    "clapping_hands":
+        CLAPPING_HANDS_IMAGE,
+
+    "car":
+        CAR_IMAGE,
+
+    "alarm":
+        ALARM_IMAGE,
+
+    "animal":
+        ANIMAL_IMAGE,
+
+    "nature":
+        NATURE_IMAGE,
+
+    "talking":
+        TALKING_IMAGE,
+}
+
 
 # ==================================================
 # BACKGROUND OVERLAY
 # ==================================================
 
 BACKGROUND_OVERLAY = pygame.Surface(
-    (SCREEN_WIDTH, SCREEN_HEIGHT),
-    pygame.SRCALPHA
+    (
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+    ),
+    pygame.SRCALPHA,
 )
 
 BACKGROUND_OVERLAY.fill(
-    (0, 0, 0, 70)
+    (
+        0,
+        0,
+        0,
+        70,
+    )
 )
 
 
@@ -187,7 +283,7 @@ mic = audio.open(
 
 
 # ==================================================
-# ANIMATION STATE
+# STATE
 # ==================================================
 
 running = True
@@ -195,6 +291,48 @@ running = True
 particles = []
 
 shape_states = {}
+
+
+predictions = []
+
+rms = 0.0
+
+
+last_prediction_time = (
+    -PREDICTION_INTERVAL_MS
+)
+
+
+# --------------------------------------------------
+# Noise-floor calibration
+# --------------------------------------------------
+
+calibration_values = []
+
+noise_floor = None
+
+quiet_threshold = (
+    ABSOLUTE_MIN_RMS
+)
+
+is_calibrating = True
+
+
+# ==================================================
+# BACKGROUND RESULT
+# ==================================================
+
+def background_result(
+    label="Listening",
+):
+
+    return [
+        {
+            "category": "Background",
+            "display_label": label,
+            "confidence": 0.0,
+        }
+    ]
 
 
 # ==================================================
@@ -210,29 +348,18 @@ def draw_floating_icon(
     alpha,
     confidence,
 ):
-    """
-    Draw a clean PNG icon with a subtle illuminated
-    socle underneath.
-
-    No layered neon silhouette.
-
-    Confidence controls:
-        - icon size elsewhere in the animation
-        - icon opacity
-        - only a SMALL change in socle brightness
-    """
 
     x, y = center
 
     icon_size = max(
         1,
-        size * 2
+        size * 2,
     )
 
 
-    # ==================================================
-    # 1. SOFT SOCLE / SHADOW
-    # ==================================================
+    # --------------------------------------------------
+    # SOCLE
+    # --------------------------------------------------
 
     socle_width = int(
         icon_size * 0.90
@@ -240,75 +367,71 @@ def draw_floating_icon(
 
     socle_height = max(
         16,
-        int(icon_size * 0.14)
+        int(
+            icon_size * 0.14
+        ),
     )
 
 
-    # Surface is intentionally larger than the ellipse
-    # so the edges do not feel cramped.
     socle_surface = pygame.Surface(
         (
             socle_width + 40,
-            socle_height + 30
+            socle_height + 30,
         ),
-        pygame.SRCALPHA
+        pygame.SRCALPHA,
     )
 
 
-    # Keep confidence effect subtle.
     socle_alpha = int(
-        30 + confidence * 35
+        30
+        + confidence * 35
     )
 
-
-    # --------------------------------------------------
-    # Soft outer ellipse
-    # --------------------------------------------------
 
     pygame.draw.ellipse(
         socle_surface,
         (
             *color,
-            socle_alpha // 2
+            socle_alpha // 2,
         ),
         (
             10,
             10,
             socle_width + 20,
-            socle_height + 8
-        )
+            socle_height + 8,
+        ),
     )
 
-
-    # --------------------------------------------------
-    # Slightly brighter center
-    # --------------------------------------------------
 
     pygame.draw.ellipse(
         socle_surface,
         (
             *color,
-            socle_alpha
+            socle_alpha,
         ),
         (
             30,
             14,
+
             max(
                 10,
-                socle_width - 20
+                socle_width - 20,
             ),
+
             max(
                 4,
-                socle_height
-            )
-        )
+                socle_height,
+            ),
+        ),
     )
 
 
-    socle_rect = socle_surface.get_rect(
-        center=(
-            x,
-            y + size + 18
+    socle_rect = (
+        socle_surface.get_rect(
+            center=(
+                x,
+                y + size + 18,
+            )
         )
     )
 
@@ -316,19 +439,21 @@ def draw_floating_icon(
     surface.blit(
         socle_surface,
         socle_rect,
-        special_flags=pygame.BLEND_RGBA_ADD
+        special_flags=pygame.BLEND_RGBA_ADD,
     )
 
 
-    # ==================================================
-    # 2. CRISP ICON
-    # ==================================================
+    # --------------------------------------------------
+    # ICON
+    # --------------------------------------------------
 
-    scaled_image = pygame.transform.smoothscale(
-        image,
-        (
-            icon_size,
-            icon_size
+    scaled_image = (
+        pygame.transform.smoothscale(
+            image,
+            (
+                icon_size,
+                icon_size,
+            ),
         )
     )
 
@@ -338,83 +463,45 @@ def draw_floating_icon(
     )
 
 
-    image_rect = scaled_image.get_rect(
-        center=(
-            x,
-            y
+    image_rect = (
+        scaled_image.get_rect(
+            center=(
+                x,
+                y,
+            )
         )
     )
 
 
     surface.blit(
         scaled_image,
-        image_rect
+        image_rect,
     )
 
 
 # ==================================================
-# MAIN LOOP
+# PREDICTION ADAPTER
 # ==================================================
 
-while running:
+def adapt_predictions(
+    raw_predictions,
+):
 
-    # ==================================================
-    # 1. EVENTS
-    # ==================================================
+    if not raw_predictions:
 
-    for event in pygame.event.get():
-
-        if event.type == pygame.QUIT:
-            running = False
+        return background_result()
 
 
-    # ==================================================
-    # 2. TEMPORARY TEST DATA
-    #
-    # Keep this while we finish the UX.
-    #
-    # Later:
-    #
-    # predictions, rms = process_microphone(mic)
-    # rms = float(rms)
-    # ==================================================
-
-    rms = 0.05
+    valid_predictions = []
 
 
-    predictions = [
-        {
-            "category": "Alert",
-            "display_label": "Siren",
-            "confidence": 0.60,
-        },
-
-        {
-            "category": "Nature",
-            "display_label": "forest",
-            "confidence": 0.90,
-        },
-
-        {
-            "category": "Animal",
-            "display_label": "Cat",
-            "confidence": 0.75,
-        },
-    ]
-
-
-    # ==================================================
-    # 3. MODEL -> GRAPHICS ADAPTER
-    # ==================================================
-
-    active_sounds = []
-
-
-    for prediction in predictions[:3]:
+    for prediction in raw_predictions:
 
         category = prediction.get(
             "category",
-            prediction.get("class_name")
+            prediction.get(
+                "class_name"
+            ),
         )
 
 
@@ -422,202 +509,274 @@ while running:
             "display_label",
             prediction.get(
                 "class_name",
-                category
-            )
+                category,
+            ),
         )
 
 
         confidence = float(
             prediction.get(
                 "confidence",
-                0.0
+                0.0,
             )
         )
 
 
-        confidence = max(
-            0.0,
-            min(
-                confidence,
-                1.0
-            )
-        )
+        if category not in SOUND_VISUALS:
+            continue
 
 
-        if category in SOUND_VISUALS:
+        if confidence < MIN_DISPLAY_CONFIDENCE:
+            continue
 
-            active_sounds.append({
+
+        valid_predictions.append(
+            {
                 "category": category,
                 "display_label": display_label,
                 "confidence": confidence,
-            })
+            }
+        )
 
 
-    # ==================================================
-    # 4. BACKGROUND FALLBACK
-    # ==================================================
+    if not valid_predictions:
+
+        return background_result()
+
+
+    # --------------------------------------------------
+    # Sort strongest first
+    # --------------------------------------------------
+
+    valid_predictions.sort(
+        key=lambda item: item[
+            "confidence"
+        ],
+        reverse=True,
+    )
+
+
+    # --------------------------------------------------
+    # Always show strongest meaningful prediction
+    # --------------------------------------------------
+
+    active_sounds = [
+        valid_predictions[0]
+    ]
+
+
+    # --------------------------------------------------
+    # Secondary predictions must be much stronger
+    # --------------------------------------------------
+
+    for prediction in valid_predictions[1:]:
+
+        if (
+            prediction["confidence"]
+            >= SECONDARY_CONFIDENCE_THRESHOLD
+        ):
+
+            active_sounds.append(
+                prediction
+            )
+
+
+        if (
+            len(active_sounds)
+            >= MAX_DISPLAYED_SOUNDS
+        ):
+
+            break
+
+
+    return active_sounds
+
+
+# ==================================================
+# PARTICLES
+# ==================================================
+
+def update_particles(
+    active_sounds,
+    current_rms,
+):
 
     if not active_sounds:
-
-        active_sounds = [{
-            "category": "Background",
-            "display_label": "Listening",
-            "confidence": 0.0,
-        }]
+        return
 
 
-    # ==================================================
-    # 5. RMS -> PARTICLES
-    # ==================================================
-
-    if rms >= 0.05:
-
-        if rms < 0.065:
-            particle_probability = 0.15
-
-        elif rms < 0.08:
-            particle_probability = 0.40
-
-        else:
-            particle_probability = 0.80
+    if (
+        active_sounds[0]["category"]
+        == "Background"
+    ):
+        return
 
 
-        if random.random() < particle_probability:
+    if current_rms < 0.01:
 
-            for index, sound in enumerate(
-                active_sounds
-            ):
+        particle_probability = 0.10
 
-                category = sound["category"]
+    elif current_rms < 0.03:
 
+        particle_probability = 0.25
 
-                if category == "Background":
-                    continue
+    elif current_rms < 0.06:
 
+        particle_probability = 0.50
 
-                x, y = SHAPE_POSITIONS[index]
+    else:
 
-
-                angle = random.uniform(
-                    0,
-                    2 * math.pi
-                )
+        particle_probability = 0.80
 
 
-                # RMS slightly affects particle speed.
-                speed = random.uniform(
-                    0.8,
-                    1.5 + rms * 15
-                )
+    if (
+        random.random()
+        >= particle_probability
+    ):
+        return
 
 
-                particles.append({
-                    "x": x,
-                    "y": y,
+    for index, sound in enumerate(
+        active_sounds[:3]
+    ):
 
-                    "vx": (
-                        math.cos(angle)
-                        * speed
-                    ),
+        category = sound[
+            "category"
+        ]
 
-                    "vy": (
-                        math.sin(angle)
-                        * speed
-                    ),
 
-                    "life": 55,
+        if category == "Background":
+            continue
 
-                    "color": SOUND_VISUALS[
+
+        x, y = SHAPE_POSITIONS[
+            index
+        ]
+
+
+        angle = random.uniform(
+            0,
+            2 * math.pi,
+        )
+
+
+        speed = random.uniform(
+            0.8,
+            1.5
+            + current_rms * 15,
+        )
+
+
+        particles.append(
+            {
+                "x": x,
+                "y": y,
+
+                "vx":
+                    math.cos(angle)
+                    * speed,
+
+                "vy":
+                    math.sin(angle)
+                    * speed,
+
+                "life": 55,
+
+                "color":
+                    SOUND_VISUALS[
                         category
                     ]["color"],
-                })
+            }
+        )
 
 
-    # ==================================================
-    # 6. BACKGROUND
-    # ==================================================
+# ==================================================
+# HEADER
+# ==================================================
 
-    screen.fill(
-        (5, 7, 12)
-    )
-
-
-    # Preserve the background placement you liked.
-    screen.blit(
-        BACKGROUND_IMAGE,
-        (0, 105)
-    )
-
-
-    screen.blit(
-        BACKGROUND_OVERLAY,
-        (0, 0)
-    )
-
-
-    # ==================================================
-    # 7. HEADER
-    # ==================================================
+def draw_header(
+    current_rms,
+):
 
     title_text = title_font.render(
         "SPECTRA AI",
         True,
-        (245, 245, 250),
+        (
+            245,
+            245,
+            250,
+        ),
     )
 
 
     subtitle_text = subtitle_font.render(
         "Real-time Sound Analysis",
         True,
-        (175, 180, 195),
+        (
+            175,
+            180,
+            195,
+        ),
     )
 
 
     screen.blit(
         title_text,
-        (35, 25)
+        (
+            35,
+            25,
+        ),
     )
 
 
     screen.blit(
         subtitle_text,
-        (37, 65)
+        (
+            37,
+            65,
+        ),
     )
 
-
-    # ==================================================
-    # 8. RMS DISPLAY
-    # ==================================================
 
     rms_label = small_font.render(
         "RMS",
         True,
-        (190, 195, 205),
+        (
+            190,
+            195,
+            205,
+        ),
     )
 
 
     rms_value = rms_font.render(
-        f"{rms:.2f}",
+        f"{current_rms:.4f}",
         True,
-        (245, 245, 250),
+        (
+            245,
+            245,
+            250,
+        ),
     )
 
 
     screen.blit(
         rms_label,
-        (690, 25)
+        (
+            670,
+            25,
+        ),
     )
 
 
     screen.blit(
         rms_value,
-        (680, 48)
+        (
+            650,
+            48,
+        ),
     )
 
-
-    # --------------------------------------------------
-    # RMS meter
-    # --------------------------------------------------
 
     meter_x = 755
     meter_y = 25
@@ -628,23 +787,27 @@ while running:
 
     pygame.draw.rect(
         screen,
-        (40, 45, 55),
+        (
+            40,
+            45,
+            55,
+        ),
         (
             meter_x,
             meter_y,
             meter_width,
-            meter_height
+            meter_height,
         ),
-        border_radius=4
+        border_radius=4,
     )
 
 
     rms_normalized = max(
         0.0,
         min(
-            rms / 0.10,
-            1.0
-        )
+            current_rms / 0.10,
+            1.0,
+        ),
     )
 
 
@@ -658,7 +821,11 @@ while running:
 
         pygame.draw.rect(
             screen,
-            (30, 220, 130),
+            (
+                30,
+                220,
+                130,
+            ),
             (
                 meter_x,
 
@@ -667,93 +834,121 @@ while running:
                 - fill_height,
 
                 meter_width,
-                fill_height
+                fill_height,
             ),
-            border_radius=4
+            border_radius=4,
         )
 
 
-    # ==================================================
-    # 9. CONFIDENCE LABELS
-    # ==================================================
+# ==================================================
+# CONFIDENCE
+# ==================================================
+
+def draw_confidences(
+    active_sounds,
+):
 
     for index, sound in enumerate(
-        active_sounds
+        active_sounds[:3]
     ):
 
-        category = sound["category"]
+        category = sound[
+            "category"
+        ]
 
 
         if category == "Background":
             continue
 
 
-        confidence = sound["confidence"]
+        confidence = sound[
+            "confidence"
+        ]
+
 
         color = SOUND_VISUALS[
             category
         ]["color"]
 
-        x, y = SHAPE_POSITIONS[index]
+
+        x, _ = SHAPE_POSITIONS[
+            index
+        ]
 
 
-        percentage = (
-            f"{confidence * 100:.0f}%"
+        percentage_text = (
+            confidence_font.render(
+                f"{confidence * 100:.0f}%",
+                True,
+                color,
+            )
         )
 
 
-        percentage_text = confidence_font.render(
-            percentage,
-            True,
-            color,
-        )
-
-
-        percentage_rect = percentage_text.get_rect(
-            center=(
-                x,
-                215
+        percentage_rect = (
+            percentage_text.get_rect(
+                center=(
+                    x,
+                    215,
+                )
             )
         )
 
 
         screen.blit(
             percentage_text,
-            percentage_rect
+            percentage_rect,
         )
 
 
-        confidence_text = confidence_label_font.render(
-            "CONFIDENCE",
-            True,
-            (155, 160, 175),
+        confidence_text = (
+            confidence_label_font.render(
+                "CONFIDENCE",
+                True,
+                (
+                    155,
+                    160,
+                    175,
+                ),
+            )
         )
 
 
-        confidence_rect = confidence_text.get_rect(
-            center=(
-                x,
-                242
+        confidence_rect = (
+            confidence_text.get_rect(
+                center=(
+                    x,
+                    242,
+                )
             )
         )
 
 
         screen.blit(
             confidence_text,
-            confidence_rect
+            confidence_rect,
         )
 
 
-    # ==================================================
-    # 10. ICONS
-    # ==================================================
+# ==================================================
+# ICONS
+# ==================================================
+
+def draw_icons(
+    active_sounds,
+):
 
     for index, sound in enumerate(
-        active_sounds
+        active_sounds[:3]
     ):
 
-        category = sound["category"]
-        confidence = sound["confidence"]
+        category = sound[
+            "category"
+        ]
+
+        confidence = sound[
+            "confidence"
+        ]
 
 
         visual = SOUND_VISUALS[
@@ -761,15 +956,20 @@ while running:
         ]
 
 
-        shape = visual["shape"]
-        color = visual["color"]
+        shape = visual[
+            "shape"
+        ]
+
+        color = visual[
+            "color"
+        ]
 
 
         if category == "Background":
 
             x, y = (
                 400,
-                345
+                345,
             )
 
         else:
@@ -779,13 +979,11 @@ while running:
             ]
 
 
-        # --------------------------------------------------
-        # Animation memory
-        # --------------------------------------------------
-
         if category not in shape_states:
 
-            shape_states[category] = {
+            shape_states[
+                category
+            ] = {
                 "size": 30.0,
                 "alpha": 60.0,
             }
@@ -796,10 +994,6 @@ while running:
         ]
 
 
-        # ==================================================
-        # CONFIDENCE -> ICON PROMINENCE
-        # ==================================================
-
         if category == "Background":
 
             target_size = 45
@@ -807,7 +1001,6 @@ while running:
 
         else:
 
-            # Slightly less dramatic than before.
             target_size = (
                 40
                 + confidence * 40
@@ -843,226 +1036,114 @@ while running:
                 0,
                 min(
                     state["alpha"],
-                    255
-                )
+                    255,
+                ),
             )
-        )
-
-
-        rgba_color = (
-            *color,
-            alpha
         )
 
 
         shape_surface = pygame.Surface(
             (
                 SCREEN_WIDTH,
-                SCREEN_HEIGHT
+                SCREEN_HEIGHT,
             ),
             pygame.SRCALPHA,
         )
 
 
-        # ==================================================
-        # BACKGROUND
-        # ==================================================
-
         if shape == "circle":
 
             draw_circle(
                 shape_surface,
-                rgba_color,
-                (x, y),
-                size,
-            )
-
-
-        # ==================================================
-        # ALERT
-        #
-        # Still temporary until we have a PNG.
-        # ==================================================
-
-        elif shape == "triangle":
-
-            points = [
+                (
+                    *color,
+                    alpha,
+                ),
                 (
                     x,
-                    y - size
+                    y,
                 ),
-
-                (
-                    x - size,
-                    y + size
-                ),
-
-                (
-                    x + size,
-                    y + size
-                ),
-            ]
-
-
-            draw_polygon(
-                shape_surface,
-                rgba_color,
-                points,
+                size,
             )
 
 
-        # ==================================================
-        # MUSIC
-        # ==================================================
-
-        elif shape == "polygon":
-
-            points = [
-                (
-                    x - size,
-                    y - size
-                ),
-
-                (
-                    x + size,
-                    y - size
-                ),
-
-                (
-                    x + size,
-                    y + size
-                ),
-
-                (
-                    x - size,
-                    y + size
-                ),
-            ]
-
-
-            draw_polygon(
-                shape_surface,
-                rgba_color,
-                points,
-            )
-
-
-        # ==================================================
-        # CAR
-        # ==================================================
-
-        elif shape == "car":
+        elif shape in ICON_IMAGES:
 
             draw_floating_icon(
                 shape_surface,
-                CAR_IMAGE,
-                (x, y),
+
+                ICON_IMAGES[
+                    shape
+                ],
+
+                (
+                    x,
+                    y,
+                ),
+
                 size,
                 color,
                 alpha,
                 confidence,
             )
 
-
-        # ==================================================
-        # CLAPPING HANDS
-        # ==================================================
-
-        elif shape == "clapping_hands":
-
-            draw_floating_icon(
-                shape_surface,
-                CLAPPING_HANDS_IMAGE,
-                (x, y),
-                size,
-                color,
-                alpha,
-                confidence,
-            )
-
-        elif shape == "alarm":
-            draw_floating_icon(
-            shape_surface,
-            ALARM_IMAGE,
-            (x, y),
-            size,
-            color,
-            alpha,
-            confidence,
-            )
-
-        elif shape == "animal":
-            draw_floating_icon(
-            shape_surface,
-            ANIMAL_IMAGE,
-            (x, y),
-            size,
-            color,
-            alpha,
-            confidence,
-            )
-
-        elif shape == "nature":
-            draw_floating_icon(
-            shape_surface,
-            NATURE_IMAGE,
-            (x, y),
-            size,
-            color,
-            alpha,
-            confidence,
-            )
-
-        elif shape == "talking":
-            draw_floating_icon(
-            shape_surface,
-            TALKING_IMAGE,
-            (x, y),
-            size,
-            color,
-            alpha,
-            confidence,
-            )
 
         screen.blit(
             shape_surface,
-            (0, 0)
+            (
+                0,
+                0,
+            ),
         )
 
 
-    # ==================================================
-    # 11. PARTICLES
-    # ==================================================
+# ==================================================
+# DRAW PARTICLES
+# ==================================================
+
+def draw_particles(
+    current_rms,
+):
 
     particle_size = max(
         3,
         int(
-            3 + rms * 10
-        )
+            3
+            + current_rms * 10
+        ),
     )
 
 
     for particle in particles:
 
-        particle["x"] += particle["vx"]
-        particle["y"] += particle["vy"]
+        particle["x"] += particle[
+            "vx"
+        ]
+
+        particle["y"] += particle[
+            "vy"
+        ]
 
         particle["life"] -= 1
 
 
-        # Fade particles near the end of their life.
         particle_alpha = int(
             255
             * max(
                 0,
-                particle["life"] / 55
+                particle["life"] / 55,
             )
         )
 
 
-        particle_surface = pygame.Surface(
-            (12, 12),
-            pygame.SRCALPHA
+        particle_surface = (
+            pygame.Surface(
+                (
+                    12,
+                    12,
+                ),
+                pygame.SRCALPHA,
+            )
         )
 
 
@@ -1070,9 +1151,12 @@ while running:
             particle_surface,
             (
                 *particle["color"],
-                particle_alpha
+                particle_alpha,
             ),
-            (6, 6),
+            (
+                6,
+                6,
+            ),
             particle_size,
         )
 
@@ -1080,31 +1164,78 @@ while running:
         screen.blit(
             particle_surface,
             (
-                int(particle["x"] - 6),
-                int(particle["y"] - 6)
-            )
+                int(
+                    particle["x"]
+                    - 6
+                ),
+
+                int(
+                    particle["y"]
+                    - 6
+                ),
+            ),
         )
 
 
-    particles = [
+    particles[:] = [
         particle
         for particle in particles
         if particle["life"] > 0
     ]
 
 
-    # ==================================================
-    # 12. SOUND LABELS
-    # ==================================================
+# ==================================================
+# LABELS
+# ==================================================
+
+def draw_sound_labels(
+    active_sounds,
+):
 
     for index, sound in enumerate(
-        active_sounds
+        active_sounds[:3]
     ):
 
-        category = sound["category"]
+        category = sound[
+            "category"
+        ]
 
 
         if category == "Background":
+
+            display_label = sound[
+                "display_label"
+            ]
+
+
+            listening_label = (
+                sound_name_font.render(
+                    display_label,
+                    True,
+                    (
+                        190,
+                        195,
+                        205,
+                    ),
+                )
+            )
+
+
+            listening_rect = (
+                listening_label.get_rect(
+                    center=(
+                        400,
+                        445,
+                    )
+                )
+            )
+
+
+            screen.blit(
+                listening_label,
+                listening_rect,
+            )
+
             continue
 
 
@@ -1118,89 +1249,107 @@ while running:
         ]["color"]
 
 
-        x, y = SHAPE_POSITIONS[
+        x, _ = SHAPE_POSITIONS[
             index
         ]
 
 
-        # --------------------------------------------------
-        # Specific sound
-        # --------------------------------------------------
-
-        sound_name = sound_name_font.render(
-            display_label,
-            True,
-            (245, 245, 250),
+        sound_name = (
+            sound_name_font.render(
+                display_label,
+                True,
+                (
+                    245,
+                    245,
+                    250,
+                ),
+            )
         )
 
 
-        sound_name_rect = sound_name.get_rect(
-            center=(
-                x,
-                445
+        sound_name_rect = (
+            sound_name.get_rect(
+                center=(
+                    x,
+                    445,
+                )
             )
         )
 
 
         screen.blit(
             sound_name,
-            sound_name_rect
+            sound_name_rect,
         )
 
 
-        # --------------------------------------------------
-        # Broad category
-        # --------------------------------------------------
-
-        category_text = category_font.render(
-            category,
-            True,
-            color,
+        category_text = (
+            category_font.render(
+                category,
+                True,
+                color,
+            )
         )
 
 
-        category_rect = category_text.get_rect(
-            center=(
-                x,
-                470
+        category_rect = (
+            category_text.get_rect(
+                center=(
+                    x,
+                    470,
+                )
             )
         )
 
 
         screen.blit(
             category_text,
-            category_rect
+            category_rect,
         )
 
 
-    # ==================================================
-    # 13. LISTENING STATUS
-    # ==================================================
+# ==================================================
+# FOOTER
+# ==================================================
+
+def draw_footer():
 
     pygame.draw.circle(
         screen,
-        (30, 220, 130),
-        (35, 570),
-        5
+        (
+            30,
+            220,
+            130,
+        ),
+        (
+            35,
+            570,
+        ),
+        5,
     )
 
 
-    listening_text = small_font.render(
-        "Listening...",
-        True,
-        (185, 190, 205),
+    listening_text = (
+        small_font.render(
+            "Listening...",
+            True,
+            (
+                185,
+                190,
+                205,
+            ),
+        )
     )
 
 
     screen.blit(
         listening_text,
-        (50, 560)
+        (
+            50,
+            560,
+        ),
     )
 
-
-    # ==================================================
-    # 14. FPS
-    # ==================================================
 
     fps = clock.get_fps()
 
@@ -1208,38 +1357,310 @@ while running:
     fps_text = small_font.render(
         f"FPS: {fps:.0f}",
         True,
-        (140, 145, 160),
+        (
+            140,
+            145,
+            160,
+        ),
     )
 
 
     fps_rect = fps_text.get_rect(
         right=765,
-        centery=570
+        centery=570,
     )
 
 
     screen.blit(
         fps_text,
-        fps_rect
+        fps_rect,
     )
 
 
-    # ==================================================
-    # 15. UPDATE DISPLAY
-    # ==================================================
+# ==================================================
+# MAIN LOOP
+# ==================================================
 
-    pygame.display.flip()
+try:
 
-    clock.tick(60)
+    while running:
+
+        # --------------------------------------------------
+        # EVENTS
+        # --------------------------------------------------
+
+        for event in pygame.event.get():
+
+            if event.type == pygame.QUIT:
+
+                running = False
+
+
+        # --------------------------------------------------
+        # MODEL REFRESH
+        # --------------------------------------------------
+
+        current_time = (
+            pygame.time.get_ticks()
+        )
+
+
+        if (
+            current_time
+            - last_prediction_time
+            >= PREDICTION_INTERVAL_MS
+        ):
+
+            new_predictions, new_rms = (
+                process_microphone(
+                    mic
+                )
+            )
+
+
+            rms = float(
+                new_rms
+            )
+
+
+            # ==================================================
+            # CALIBRATION
+            # ==================================================
+
+            if is_calibrating:
+
+                calibration_values.append(
+                    rms
+                )
+
+
+                predictions = []
+
+
+                print(
+                    f"CALIBRATING "
+                    f"{len(calibration_values)}/"
+                    f"{CALIBRATION_SAMPLES} "
+                    f"| RMS: {rms:.5f}"
+                )
+
+
+                if (
+                    len(calibration_values)
+                    >= CALIBRATION_SAMPLES
+                ):
+
+                    noise_floor = (
+                        statistics.median(
+                            calibration_values
+                        )
+                    )
+
+
+                    quiet_threshold = max(
+                        ABSOLUTE_MIN_RMS,
+
+                        noise_floor
+                        * NOISE_MULTIPLIER
+                        + NOISE_MARGIN,
+                    )
+
+
+                    is_calibrating = False
+
+
+                    print(
+                        "\n"
+                        "Calibration complete."
+                    )
+
+                    print(
+                        f"Noise floor: "
+                        f"{noise_floor:.5f}"
+                    )
+
+                    print(
+                        f"Quiet threshold: "
+                        f"{quiet_threshold:.5f}"
+                    )
+
+                    print()
+
+
+            # ==================================================
+            # NORMAL OPERATION
+            # ==================================================
+
+            else:
+
+                # ----------------------------------------------
+                # BACKGROUND / QUIET
+                # ----------------------------------------------
+
+                if rms <= quiet_threshold:
+
+                    predictions = []
+
+
+                    # Slowly adapt to changing room noise.
+                    noise_floor = (
+                        0.95
+                        * noise_floor
+                        + 0.05
+                        * rms
+                    )
+
+
+                    quiet_threshold = max(
+                        ABSOLUTE_MIN_RMS,
+
+                        noise_floor
+                        * NOISE_MULTIPLIER
+                        + NOISE_MARGIN,
+                    )
+
+
+                    print(
+                        f"QUIET "
+                        f"| RMS: {rms:.5f} "
+                        f"| threshold: "
+                        f"{quiet_threshold:.5f}"
+                    )
+
+
+                # ----------------------------------------------
+                # MEANINGFUL SOUND
+                # ----------------------------------------------
+
+                else:
+
+                    predictions = (
+                        new_predictions
+                    )
+
+
+                    print(
+                        f"SOUND "
+                        f"| RMS: {rms:.5f} "
+                        f"| threshold: "
+                        f"{quiet_threshold:.5f} "
+                        f"| {new_predictions}"
+                    )
+
+
+            last_prediction_time = (
+                current_time
+            )
+
+
+        # --------------------------------------------------
+        # GRAPHICS
+        # --------------------------------------------------
+
+        if is_calibrating:
+
+            active_sounds = (
+                background_result(
+                    "Calibrating..."
+                )
+            )
+
+        else:
+
+            active_sounds = (
+                adapt_predictions(
+                    predictions
+                )
+            )
+
+
+        update_particles(
+            active_sounds,
+            rms,
+        )
+
+
+        # --------------------------------------------------
+        # BACKGROUND
+        # --------------------------------------------------
+
+        screen.fill(
+            (
+                5,
+                7,
+                12,
+            )
+        )
+
+
+        screen.blit(
+            BACKGROUND_IMAGE,
+            (
+                0,
+                105,
+            ),
+        )
+
+
+        screen.blit(
+            BACKGROUND_OVERLAY,
+            (
+                0,
+                0,
+            ),
+        )
+
+
+        # --------------------------------------------------
+        # UI
+        # --------------------------------------------------
+
+        draw_header(
+            rms
+        )
+
+
+        draw_confidences(
+            active_sounds
+        )
+
+
+        draw_icons(
+            active_sounds
+        )
+
+
+        draw_particles(
+            rms
+        )
+
+
+        draw_sound_labels(
+            active_sounds
+        )
+
+
+        draw_footer()
+
+
+        pygame.display.flip()
+
+
+        clock.tick(
+            FPS
+        )
 
 
 # ==================================================
 # CLEANUP
 # ==================================================
 
-mic.stop_stream()
-mic.close()
+finally:
 
-audio.terminate()
+    mic.stop_stream()
 
-pygame.quit()
+    mic.close()
+
+    audio.terminate()
+
+    pygame.quit()

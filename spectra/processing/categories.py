@@ -1,59 +1,74 @@
+# ==================================================
+# ESC-50 CLASSES
+# ==================================================
+
 ESC50_CLASSES = [
-"dog",
-"rooster",
-"pig",
-"cow",
-"frog",
-"cat",
-"hen",
-"insects",
-"sheep",
-"crow",
-"rain",
-"sea_waves",
-"crackling_fire",
-"crickets",
-"chirping_birds",
-"water_drops",
-"wind",
-"pouring_water",
-"toilet_flush",
-"thunderstorm",
-"crying_baby",
-"sneezing",
-"clapping",
-"breathing",
-"coughing",
-"footsteps",
-"laughing",
-"brushing_teeth",
-"snoring",
-"drinking_sipping",
-"door_wood_knock",
-"mouse_click",
-"keyboard_typing",
-"door_wood_creaks",
-"can_opening",
-"washing_machine",
-"vacuum_cleaner",
-"clock_alarm",
-"clock_tick",
-"glass_breaking",
-"helicopter",
-"chainsaw",
-"siren",
-"car_horn",
-"engine",
-"train",
-"church_bells",
-"airplane",
-"fireworks",
-"hand_saw",
+    "dog",
+    "rooster",
+    "pig",
+    "cow",
+    "frog",
+    "cat",
+    "hen",
+    "insects",
+    "sheep",
+    "crow",
+    "rain",
+    "sea_waves",
+    "crackling_fire",
+    "crickets",
+    "chirping_birds",
+    "water_drops",
+    "wind",
+    "pouring_water",
+    "toilet_flush",
+    "thunderstorm",
+    "crying_baby",
+    "sneezing",
+    "clapping",
+    "breathing",
+    "coughing",
+    "footsteps",
+    "laughing",
+    "brushing_teeth",
+    "snoring",
+    "drinking_sipping",
+    "door_wood_knock",
+    "mouse_click",
+    "keyboard_typing",
+    "door_wood_creaks",
+    "can_opening",
+    "washing_machine",
+    "vacuum_cleaner",
+    "clock_alarm",
+    "clock_tick",
+    "glass_breaking",
+    "helicopter",
+    "chainsaw",
+    "siren",
+    "car_horn",
+    "engine",
+    "train",
+    "church_bells",
+    "airplane",
+    "fireworks",
+    "hand_saw",
 ]
 
 
+# ==================================================
+# BROAD SPECTRA CATEGORIES
+# ==================================================
+
 ESC50_CATEGORIES = {
-    "Clapping": ["clapping", "door_knock","hand_saw", "brushing_teeth", "chainsaw"],
+
+    "Clapping": [
+        "clapping",
+        "door_wood_knock",
+        "hand_saw",
+        "brushing_teeth",
+        "chainsaw",
+    ],
 
     "Human": [
         "crying_baby",
@@ -71,7 +86,7 @@ ESC50_CATEGORIES = {
         "clock_tick",
         "church_bells",
         "laughing",
-        "footsteps"
+        "footsteps",
     ],
 
     "Animal": [
@@ -86,7 +101,7 @@ ESC50_CATEGORIES = {
         "sheep",
         "crow",
         "crickets",
-        "chirping_birds"
+        "chirping_birds",
     ],
 
     "Nature": [
@@ -97,13 +112,13 @@ ESC50_CATEGORIES = {
         "wind",
         "pouring_water",
         "thunderstorm",
-        "door_wood_creaks"
+        "door_wood_creaks",
     ],
 
     "Alert": [
         "siren",
         "glass_breaking",
-        "fireworks"
+        "fireworks",
     ],
 
     "Vehicle": [
@@ -111,10 +126,18 @@ ESC50_CATEGORIES = {
         "car_horn",
         "engine",
         "train",
-        "airplane"
-    ]
+        "airplane",
+    ],
 }
 
+
+# ==================================================
+# REVERSE LOOKUP
+#
+# sneezing -> Human
+# dog      -> Animal
+# siren    -> Alert
+# ==================================================
 
 SOUNDS_DICT = {}
 
@@ -122,5 +145,9 @@ for category, sounds in ESC50_CATEGORIES.items():
     for sound in sounds:
         SOUNDS_DICT[sound] = category
 
+
+# ==================================================
+# FALLBACK
+# ==================================================
 
 DEFAULT_CATEGORY = "Background"
