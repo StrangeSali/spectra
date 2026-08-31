@@ -1,27 +1,2 @@
-# Legacy patches for TensorFlow Hub
-setuptools<81.0.0
-
-# Core Framework & Server
-fastapi==0.136.1
-uvicorn[standard]==0.29.0
-python-multipart
-python-dotenv
-
-# Data Science, ML & Audio Processing
-numpy==2.5.2
-scipy==1.18.1
-librosa
-soundfile==0.14.0
-pyaudio
-
-# Machine Learning & AI
-tensorflow==2.21.0
-tensorflow-hub==0.16.1
-tf_keras==2.21.0
-
-# Cloud & Storage
-google-cloud-storage
-
-# Utilities
-tqdm
-websockets
+streamlit
+requests
