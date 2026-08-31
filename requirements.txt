@@ -149,3 +149,5 @@ google-cloud-storage
 # Utilities
 tqdm
 websockets
+streamlit
+requests
