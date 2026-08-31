@@ -4,7 +4,7 @@ import pyaudio
 import numpy as np
 import json
 
-CHUNK = 16000  # 1 second at 16kHz
+CHUNK = 4000  # 1 second at 16kHz
 RATE = 16000
 
 async def stream_mic():
@@ -17,19 +17,29 @@ async def stream_mic():
         frames_per_buffer=CHUNK
     )
 
-    # Use 127.0.0.1 explicitly to avoid IPv6/IPv4 lookup confusion
     async with websockets.connect("ws://127.0.0.1:8000/predict-mic") as ws:
+        # Consume the initial "connected" message first
+        hello = json.loads(await ws.recv())
+        print("Connected:", hello)
+        session_id = hello.get("session_id")
+
         print("Streaming mic audio... Ctrl+C to stop")
-        try:
+
+        async def send_audio():
             while True:
-                # CRITICAL FIX: Run the blocking PyAudio read in a separate thread
                 data = await asyncio.to_thread(
                     stream.read, CHUNK, exception_on_overflow=False
                 )
-
                 await ws.send(data)
-                response = await ws.recv()
-                print(json.loads(response))
+
+        async def receive_predictions():
+            async for message in ws:
+                print(json.loads(message))
+
+        try:
+            # Run sending and receiving concurrently instead of alternating,
+            # so mic capture never blocks waiting on a network round trip.
+            await asyncio.gather(send_audio(), receive_predictions())
         except KeyboardInterrupt:
             print("Stopping...")
         finally:
