@@ -5,87 +5,25 @@ import pyaudio
 import tensorflow_hub as hub
 from tf_keras.models import load_model
 from google.cloud import storage
+from spectra.models.models import load_models
 
-from processing.audio import (
+from spectra.processing.audio import (
     capture_audio_chunk,
     load_audio_file,
     split_audio_into_windows,
     preprocess_audio
 )
 
-from processing.yamnet_utils import (
+from spectra.processing.yamnet_utils import (
     extract_features
 )
 
-from processing.classifier import (
+from spectra.processing.classifier import (
     predict_probabilities,
     predict_sound
 )
 
-
-# --------------------------------------------------
-# Configuration
-# --------------------------------------------------
-
-MODEL_BUCKET_NAME = os.getenv(
-    "MODEL_BUCKET_NAME"
-)
-
-MODEL_NAME = os.getenv(
-    "MODEL_NAME"
-)
-
-AUDIO_SOURCE = os.getenv(
-    "AUDIO_SOURCE",
-    "mic"
-)
-
-AUDIO_FILE = os.getenv(
-    "AUDIO_FILE"
-)
-
-
-# --------------------------------------------------
-# Load YAMNet
-# --------------------------------------------------
-
-print("Loading YAMNet...")
-
-yamnet_model = hub.load(
-    "https://tfhub.dev/google/yamnet/1"
-)
-
-print("YAMNet loaded.")
-
-
-# --------------------------------------------------
-# Load classifier from GCS
-# --------------------------------------------------
-
-print("Loading classifier...")
-
-storage_client = storage.Client()
-
-bucket = storage_client.bucket(
-    MODEL_BUCKET_NAME
-)
-
-blob = bucket.blob(
-    MODEL_NAME
-)
-
-local_model_path = "/tmp/dense_50.keras"
-
-blob.download_to_filename(
-    local_model_path
-)
-
-classifier_model = load_model(
-    local_model_path
-)
-
-print("Classifier loaded.")
-
+yamnet_model, classifier_model = load_models()
 
 # --------------------------------------------------
 # Process one waveform
