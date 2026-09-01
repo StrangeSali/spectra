@@ -3,6 +3,8 @@ import math
 import random
 from pathlib import Path
 
+# Must be set BEFORE importing pygame
+os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 import numpy as np
 import pygame
@@ -64,6 +66,7 @@ BACKGROUND_IMAGE = pygame.image.load(
     str(ASSETS_DIR / "spectra-background.png")
 )
 
+# Portrait background area
 BACKGROUND_IMAGE = pygame.transform.smoothscale(
     BACKGROUND_IMAGE,
     (SCREEN_WIDTH, 250)
@@ -96,10 +99,7 @@ TALKING_IMAGE = pygame.image.load(
 
 
 # ==================================================
-# GRAPHICS CATEGORY CONFIGURATION
-#
-# This is only a visual mapping.
-# The renderer does NOT know how categories are predicted.
+# CATEGORY CONFIGURATION
 # ==================================================
 
 CATEGORY_IMAGES = {
@@ -137,6 +137,7 @@ SECONDARY_POSITIONS = [
 ]
 
 
+# Used by particle generation
 SOUND_POSITIONS = [
     HERO_POSITION,
     SECONDARY_POSITIONS[0],
@@ -329,53 +330,37 @@ def draw_divider(surface, y):
 # RENDER ONE FRAME
 # ==================================================
 
-def render_frame(predictions, rms=0.0):
+def render_frame(predictions, rms):
     """
     Render one complete mobile Spectra frame.
-
-    The renderer is model-agnostic and API-agnostic.
-
-    It expects already-prepared prediction data such as:
-
-        [
-            {
-                "category": "Human",
-                "display_label": "People talking",
-                "confidence": 0.90,
-            },
-            {
-                "category": "Animal",
-                "display_label": "Dog",
-                "confidence": 0.65,
-            }
-        ]
 
     Parameters
     ----------
     predictions:
-        List of prediction dictionaries.
+        List of dictionaries, for example:
+
+        [
+            {
+                "category": "Clapping",
+                "display_label": "Clapping",
+                "confidence": 0.90,
+            }
+        ]
 
     rms:
         Current audio RMS intensity.
-        Defaults to 0.0 if no RMS value is available.
 
     Returns
     -------
     numpy.ndarray
-        RGB image ready for display.
+        RGB image ready for st.image().
     """
 
-    if predictions is None:
-        predictions = []
-
-    try:
-        rms = float(rms)
-    except (TypeError, ValueError):
-        rms = 0.0
+    rms = float(rms)
 
 
     # ==================================================
-    # 1. PREPARE DISPLAY DATA
+    # 1. NORMALIZE MODEL OUTPUT
     # ==================================================
 
     active_sounds = []
@@ -383,17 +368,10 @@ def render_frame(predictions, rms=0.0):
 
     for prediction in predictions:
 
-        if not isinstance(prediction, dict):
-            continue
-
-
         category = prediction.get(
-            "category"
+            "category",
+            prediction.get("class_name")
         )
-
-
-        if not category:
-            continue
 
 
         display_label = prediction.get(
@@ -405,15 +383,12 @@ def render_frame(predictions, rms=0.0):
         )
 
 
-        try:
-            confidence = float(
-                prediction.get(
-                    "confidence",
-                    0.0
-                )
+        confidence = float(
+            prediction.get(
+                "confidence",
+                0.0
             )
-        except (TypeError, ValueError):
-            confidence = 0.0
+        )
 
 
         confidence = max(
@@ -422,8 +397,6 @@ def render_frame(predictions, rms=0.0):
         )
 
 
-        # Only draw categories for which we have
-        # a visual representation.
         if category in CATEGORY_IMAGES:
 
             active_sounds.append({
@@ -524,6 +497,7 @@ def render_frame(predictions, rms=0.0):
     )
 
 
+    # Background artwork behind hero area
     surface.blit(
         BACKGROUND_IMAGE,
         (0, 125)
@@ -662,6 +636,10 @@ def render_frame(predictions, rms=0.0):
         # 8. PERSISTENT CONFIDENCE ANIMATION
         # ==================================================
 
+        # Use position + category as the state key.
+        #
+        # This is important because the same category can
+        # move between hero and secondary positions.
         state_key = (
             index,
             category
@@ -1069,8 +1047,8 @@ def render_frame(predictions, rms=0.0):
     )
 
 
-    # Pygame = width x height x RGB
-    # Streamlit / image consumers = height x width x RGB
+    # Pygame = width × height × RGB
+    # Streamlit = height × width × RGB
     frame = np.swapaxes(
         frame,
         0,
