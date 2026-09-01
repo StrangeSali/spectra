@@ -23,6 +23,25 @@ from spectra.processing.classifier import (
     predict_sound
 )
 
+MODEL_BUCKET_NAME = os.getenv(
+    "MODEL_BUCKET_NAME"
+)
+
+MODEL_NAME = os.getenv(
+    "MODEL_NAME"
+)
+
+AUDIO_SOURCE = os.getenv(
+    "AUDIO_SOURCE",
+    "mic"
+)
+
+AUDIO_FILE = os.getenv(
+    "AUDIO_FILE"
+)
+
+
+
 yamnet_model, classifier_model = load_models()
 
 # --------------------------------------------------
