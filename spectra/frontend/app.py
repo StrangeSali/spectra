@@ -54,7 +54,6 @@ analyze_clicked = st.button(
     )
 
 
-
 if analyze_clicked and audio_bytes:
 
     with st.spinner(
@@ -68,7 +67,6 @@ if analyze_clicked and audio_bytes:
                 "audio/wav",
             )
         }
-
 
         response = requests.post(
                     URL,
