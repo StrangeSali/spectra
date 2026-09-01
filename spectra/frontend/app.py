@@ -8,8 +8,149 @@ import pandas as pd
 import os
 from support.classes import DEFAULT_CATEGORY, SOUNDS_DICT
 
-st.title("Clean MVP")
+#st.title("Clean MVP")
 
+st.set_page_config(
+    page_title="Spectra AI",
+    page_icon="🎧",
+    layout="centered",
+)
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
+
+    :root {
+        --bg: #121218;
+        --surface: #1B1B24;
+        --border: #2A2A36;
+        --text: #F2F0EA;
+        --text-dim: #9C9AA8;
+        --cyan: #00E5C7;
+        --violet: #8C6DFF;
+    }
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+        color: var(--text);
+    }
+
+    .stApp {
+        background: var(--bg);
+    }
+
+#MainMenu, footer { visibility: hidden; }
+
+header {
+    background: transparent !important;
+}
+
+    /* ---- Hero ---- */
+    .hero-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 700;
+        font-size: 2.6rem;
+        line-height: 1.1;
+        margin-bottom: 0.3rem;
+        background: linear-gradient(90deg, var(--cyan), var(--violet));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+        color: var(--text-dim);
+        font-size: 1.02rem;
+        max-width: 34rem;
+        margin-bottom: 1.6rem;
+    }
+
+    /* ---- Waveform accent (single motion moment) ---- */
+    .waveform {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        height: 34px;
+        margin-bottom: 1.8rem;
+    }
+    .waveform span {
+        display: block;
+        width: 4px;
+        border-radius: 2px;
+        background: linear-gradient(180deg, var(--cyan), var(--violet));
+        animation: pulse 1.2s ease-in-out infinite;
+    }
+    .waveform span:nth-child(1) { height: 10px; animation-delay: 0s; }
+    .waveform span:nth-child(2) { height: 24px; animation-delay: 0.1s; }
+    .waveform span:nth-child(3) { height: 14px; animation-delay: 0.2s; }
+    .waveform span:nth-child(4) { height: 30px; animation-delay: 0.3s; }
+    .waveform span:nth-child(5) { height: 18px; animation-delay: 0.4s; }
+    .waveform span:nth-child(6) { height: 26px; animation-delay: 0.5s; }
+    .waveform span:nth-child(7) { height: 12px; animation-delay: 0.6s; }
+    .waveform span:nth-child(8) { height: 20px; animation-delay: 0.7s; }
+
+    @keyframes pulse {
+        0%, 100% { transform: scaleY(0.6); opacity: 0.7; }
+        50% { transform: scaleY(1); opacity: 1; }
+    }
+
+    /* ---- Cards (st.container(border=True)) ---- */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: var(--surface);
+        border: 1px solid var(--border) !important;
+        border-radius: 14px;
+        padding: 0.4rem;
+    }
+
+    /* ---- Buttons ---- */
+    .stButton > button {
+        background: linear-gradient(90deg, var(--cyan), var(--violet));
+        color: #0D0D12;
+        font-weight: 600;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 1.2rem;
+        transition: opacity 0.15s ease;
+    }
+    .stButton > button:hover {
+        opacity: 0.88;
+        color: #0D0D12;
+    }
+
+    /* ---- Progress bars (confidence) ---- */
+    [data-testid="stProgress"] > div > div {
+        background: linear-gradient(90deg, var(--cyan), var(--violet));
+    }
+
+    /* ---- Section labels ---- */
+    .section-label {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 600;
+        font-size: 1.05rem;
+        margin: 1.4rem 0 0.6rem 0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# -----------------------------------------------------------------------
+# HERO
+# -----------------------------------------------------------------------
+st.markdown(
+    """
+    <div class="waveform">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="hero-title">Spectra AI</div>
+    <div class="hero-subtitle">
+        Record a sound and see it classified and visualized in real time —
+        built for hearing accessibility.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 URL = "https://spectra-1087886990522.europe-west1.run.app/predict"
 
