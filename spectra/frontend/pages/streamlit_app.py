@@ -6,7 +6,7 @@ import av
 import numpy as np
 import requests
 import streamlit as st
-
+from live_audio import AudioDownsampler, RollingAudioBuffer,LatestChunkUploader, rms_of_pcm16, pcm16_to_wav_bytes
 from streamlit_webrtc import (
     AudioProcessorBase,
     WebRtcMode,
@@ -26,13 +26,13 @@ from spectra.processing.categories import (
 # ==================================================
 
 SAMPLE_RATE = 16000
-
+WINDOW_SECONDS = 2
 TARGET_FPS = 12
 FRAME_DURATION = 1 / TARGET_FPS
-
+HOP_SECONDS=1
 # How often we ask the API for its latest prediction.
 POLL_INTERVAL = 0.25
-
+UPLOAD_TIMEOUT=10
 
 # ==================================================
 # API CONFIGURATION
@@ -68,6 +68,83 @@ RECENT_URL = (
 )
 
 
+class SpectraAudioProcessor(AudioProcessorBase):
+
+    def __init__(self):
+        self.latest_rms = 0.0
+        self.last_error = None
+
+        self._downsampler = AudioDownsampler(SAMPLE_RATE)
+
+        self._buffer = RollingAudioBuffer(
+            window_seconds=WINDOW_SECONDS,
+            hop_seconds=HOP_SECONDS,
+            sample_rate=SAMPLE_RATE,
+        )
+
+        self.uploader = LatestChunkUploader(CHUNK_URL, timeout=UPLOAD_TIMEOUT)
+        self.uploader.start()
+
+    async def recv_queued(self, frames):
+        # Any exception here would kill the WebRTC track, so keep it contained.
+        try:
+            pcm = self._downsampler.process(frames)
+
+            if pcm.size:
+                self.latest_rms = rms_of_pcm16(pcm)
+
+                window = self._buffer.push(pcm)
+
+                if window is not None:
+                    self.uploader.submit(pcm16_to_wav_bytes(window, SAMPLE_RATE))
+
+        except Exception as error:  # surfaced in the diagnostics panel
+            self.last_error = f"{type(error).__name__}: {error}"
+
+        # SENDONLY: nothing is played back, frames are simply discarded.
+        return frames
+
+    def on_ended(self):
+        self.uploader.stop()
+
+class SpectraAudioProcessor(AudioProcessorBase):
+
+    def __init__(self):
+        self.latest_rms = 0.0
+        self.last_error = None
+
+        self._downsampler = AudioDownsampler(SAMPLE_RATE)
+
+        self._buffer = RollingAudioBuffer(
+            window_seconds=WINDOW_SECONDS,
+            hop_seconds=HOP_SECONDS,
+            sample_rate=SAMPLE_RATE,
+        )
+
+        self.uploader = LatestChunkUploader(CHUNK_URL, timeout=UPLOAD_TIMEOUT)
+        self.uploader.start()
+
+    async def recv_queued(self, frames):
+        # Any exception here would kill the WebRTC track, so keep it contained.
+        try:
+            pcm = self._downsampler.process(frames)
+
+            if pcm.size:
+                self.latest_rms = rms_of_pcm16(pcm)
+
+                window = self._buffer.push(pcm)
+
+                if window is not None:
+                    self.uploader.submit(pcm16_to_wav_bytes(window, SAMPLE_RATE))
+
+        except Exception as error:  # surfaced in the diagnostics panel
+            self.last_error = f"{type(error).__name__}: {error}"
+
+        # SENDONLY: nothing is played back, frames are simply discarded.
+        return frames
+
+    def on_ended(self):
+        self.uploader.stop()
 # ==================================================
 # STREAMLIT PAGE
 # ==================================================
