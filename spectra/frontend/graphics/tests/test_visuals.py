@@ -1,6 +1,6 @@
 import pygame
 
-from canvas import draw_circle, draw_polygon
+from spectra.frontend.graphics.canvas import draw_circle, draw_polygon
 
 
 SOUND_VISUALS = {

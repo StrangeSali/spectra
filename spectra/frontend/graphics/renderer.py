@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pygame
 
-from spectra.graphics.visualizer import lerp
+from spectra.frontend.graphics.visualizer import lerp
 
 
 # ==================================================

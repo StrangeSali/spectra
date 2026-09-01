@@ -1,5 +1,4 @@
 import os
-import queue
 import time
 
 import av
@@ -13,12 +12,10 @@ from streamlit_webrtc import (
     webrtc_streamer,
 )
 
-from spectra.graphics.renderer import render_frame, reset_animation_state
+from graphics.renderer import render_frame, reset_animation_state
 
-from spectra.processing.categories import (
-    SOUNDS_DICT,
-    DEFAULT_CATEGORY,
-)
+from support.classes import DEFAULT_CATEGORY, SOUNDS_DICT
+
 
 
 # ==================================================

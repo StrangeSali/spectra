@@ -5,16 +5,13 @@ import numpy as np
 import pygame
 import requests
 
-from spectra.graphics.renderer import (
+from graphics.renderer import (
     render_frame,
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
 )
 
-from spectra.processing.categories import (
-    SOUNDS_DICT,
-    DEFAULT_CATEGORY,
-)
+from support.classes import DEFAULT_CATEGORY, SOUNDS_DICT
 
 
 # ==================================================

@@ -2,7 +2,7 @@ import time
 
 import streamlit as st
 
-from spectra.graphics.renderer import (
+from spectra.frontend.graphics.renderer import (
     render_frame,
     reset_animation_state,
 )
