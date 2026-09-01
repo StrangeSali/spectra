@@ -13,13 +13,8 @@ from dotenv import load_dotenv
 
 # Cargar variables del archivo .env
 load_dotenv()
-from spectra.models.models import load_models
-from spectra.main import process_waveform, process_file
-from spectra.processing.audio import (
-    load_audio_file,
-    split_audio_into_windows,
-    preprocess_audio
-)
+from spectra.main import process_file
+
 from spectra.processing.classifier import predict_sound
 
 app = FastAPI(title="Spectra Audio Classifier API")
@@ -39,27 +34,56 @@ class RollingPredictionBuffer:
         self._buffer = deque(maxlen=maxlen)
         self._lock = asyncio.Lock()
 
-    async def push(self, predictions: List[Dict[str, Any]], source: str = "file") -> Dict[str, Any]:
+
+    async def push(
+        self,
+        predictions,
+        source="file",
+    ):
+
         entry = {
             "timestamp": time.time(),
             "source": source,
             "predictions": predictions,
         }
+
         async with self._lock:
-            self._buffer.append(entry)
+
+            self._buffer.append(
+                entry
+            )
+
         return entry
 
-    async def latest(self) -> Optional[Dict[str, Any]]:
-        async with self._lock:
-            return self._buffer[-1] if self._buffer else None
 
-    async def recent(self, n: int = 10) -> List[Dict[str, Any]]:
+    async def latest(self):
+
         async with self._lock:
-            items = list(self._buffer)
+
+            if not self._buffer:
+                return None
+
+            return self._buffer[-1]
+
+
+    async def recent(
+        self,
+        n=10,
+    ):
+
+        async with self._lock:
+
+            items = list(
+                self._buffer
+            )
+
         return items[-n:]
 
+
     async def clear(self):
+
         async with self._lock:
+
             self._buffer.clear()
 
 file_prediction_buffer = RollingPredictionBuffer(maxlen=100)

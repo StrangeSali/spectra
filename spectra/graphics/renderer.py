@@ -1,0 +1,1059 @@
+import os
+import math
+import random
+from pathlib import Path
+
+# Must be set BEFORE importing pygame
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+
+import numpy as np
+import pygame
+
+from spectra.graphics.visualizer import lerp
+
+
+# ==================================================
+# MOBILE SCREEN CONFIGURATION
+# ==================================================
+
+SCREEN_WIDTH = 430
+SCREEN_HEIGHT = 760
+
+
+# ==================================================
+# ASSET PATHS
+# ==================================================
+
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+
+
+# ==================================================
+# PYGAME SETUP
+# ==================================================
+
+pygame.init()
+
+
+# ==================================================
+# FONTS
+# ==================================================
+
+title_font = pygame.font.Font(None, 42)
+subtitle_font = pygame.font.Font(None, 20)
+
+hero_percentage_font = pygame.font.Font(None, 48)
+hero_name_font = pygame.font.Font(None, 34)
+hero_category_font = pygame.font.Font(None, 20)
+
+secondary_percentage_font = pygame.font.Font(None, 32)
+secondary_name_font = pygame.font.Font(None, 25)
+secondary_category_font = pygame.font.Font(None, 18)
+
+confidence_label_font = pygame.font.Font(None, 16)
+
+small_font = pygame.font.Font(None, 20)
+rms_font = pygame.font.Font(None, 25)
+
+
+# ==================================================
+# LOAD ASSETS
+#
+# No convert_alpha() because this renderer deliberately
+# has no visible Pygame display mode.
+# ==================================================
+
+BACKGROUND_IMAGE = pygame.image.load(
+    str(ASSETS_DIR / "spectra-background.png")
+)
+
+# Portrait background area
+BACKGROUND_IMAGE = pygame.transform.smoothscale(
+    BACKGROUND_IMAGE,
+    (SCREEN_WIDTH, 250)
+)
+
+
+CLAPPING_IMAGE = pygame.image.load(
+    str(ASSETS_DIR / "clapping-hands.png")
+)
+
+CAR_IMAGE = pygame.image.load(
+    str(ASSETS_DIR / "car.png")
+)
+
+ALARM_IMAGE = pygame.image.load(
+    str(ASSETS_DIR / "alarm.png")
+)
+
+ANIMAL_IMAGE = pygame.image.load(
+    str(ASSETS_DIR / "animal.png")
+)
+
+NATURE_IMAGE = pygame.image.load(
+    str(ASSETS_DIR / "nature.png")
+)
+
+TALKING_IMAGE = pygame.image.load(
+    str(ASSETS_DIR / "talking.png")
+)
+
+
+# ==================================================
+# CATEGORY CONFIGURATION
+# ==================================================
+
+CATEGORY_IMAGES = {
+    "Clapping": CLAPPING_IMAGE,
+    "Human": TALKING_IMAGE,
+    "Alert": ALARM_IMAGE,
+    "Vehicle": CAR_IMAGE,
+    "Animal": ANIMAL_IMAGE,
+    "Nature": NATURE_IMAGE,
+}
+
+
+CATEGORY_COLORS = {
+    "Clapping": (255, 180, 50),
+    "Human": (255, 180, 50),
+    "Alert": (255, 50, 80),
+    "Vehicle": (50, 150, 255),
+    "Animal": (120, 220, 130),
+    "Nature": (80, 210, 180),
+}
+
+
+# ==================================================
+# MOBILE LAYOUT POSITIONS
+#
+# Prediction 0 = hero
+# Predictions 1 and 2 = secondary sounds
+# ==================================================
+
+HERO_POSITION = (215, 300)
+
+SECONDARY_POSITIONS = [
+    (120, 525),
+    (310, 525),
+]
+
+
+# Used by particle generation
+SOUND_POSITIONS = [
+    HERO_POSITION,
+    SECONDARY_POSITIONS[0],
+    SECONDARY_POSITIONS[1],
+]
+
+
+# ==================================================
+# BACKGROUND OVERLAY
+# ==================================================
+
+BACKGROUND_OVERLAY = pygame.Surface(
+    (SCREEN_WIDTH, SCREEN_HEIGHT),
+    pygame.SRCALPHA
+)
+
+BACKGROUND_OVERLAY.fill(
+    (0, 0, 0, 70)
+)
+
+
+# ==================================================
+# PERSISTENT ANIMATION STATE
+# ==================================================
+
+shape_states = {}
+particles = []
+
+
+# ==================================================
+# RESET
+# ==================================================
+
+def reset_animation_state():
+    """
+    Reset persistent animation state.
+    """
+
+    shape_states.clear()
+    particles.clear()
+
+
+# ==================================================
+# FLOATING ICON
+# ==================================================
+
+def draw_floating_icon(
+    surface,
+    image,
+    center,
+    size,
+    color,
+    alpha,
+    confidence,
+):
+    """
+    Draw one floating icon with a subtle illuminated
+    socle underneath it.
+    """
+
+    x, y = center
+
+    icon_size = max(
+        1,
+        int(size * 2)
+    )
+
+
+    # --------------------------------------------------
+    # SOFT ILLUMINATED SOCLE
+    # --------------------------------------------------
+
+    socle_width = int(
+        icon_size * 0.90
+    )
+
+    socle_height = max(
+        12,
+        int(icon_size * 0.12)
+    )
+
+
+    socle_surface = pygame.Surface(
+        (
+            socle_width + 40,
+            socle_height + 30
+        ),
+        pygame.SRCALPHA
+    )
+
+
+    socle_alpha = int(
+        30 + confidence * 35
+    )
+
+
+    # Outer glow
+    pygame.draw.ellipse(
+        socle_surface,
+        (
+            *color,
+            socle_alpha // 2
+        ),
+        (
+            10,
+            10,
+            socle_width + 20,
+            socle_height + 8
+        )
+    )
+
+
+    # Brighter center
+    pygame.draw.ellipse(
+        socle_surface,
+        (
+            *color,
+            socle_alpha
+        ),
+        (
+            30,
+            14,
+            max(10, socle_width - 20),
+            max(4, socle_height)
+        )
+    )
+
+
+    socle_rect = socle_surface.get_rect(
+        center=(
+            x,
+            y + size + 15
+        )
+    )
+
+
+    surface.blit(
+        socle_surface,
+        socle_rect,
+        special_flags=pygame.BLEND_RGBA_ADD
+    )
+
+
+    # --------------------------------------------------
+    # ICON
+    # --------------------------------------------------
+
+    scaled_image = pygame.transform.smoothscale(
+        image,
+        (
+            icon_size,
+            icon_size
+        )
+    )
+
+
+    scaled_image.set_alpha(alpha)
+
+
+    image_rect = scaled_image.get_rect(
+        center=(x, y)
+    )
+
+
+    surface.blit(
+        scaled_image,
+        image_rect
+    )
+
+
+# ==================================================
+# DRAW DIVIDER
+# ==================================================
+
+def draw_divider(surface, y):
+    """
+    Subtle horizontal divider for the mobile layout.
+    """
+
+    pygame.draw.line(
+        surface,
+        (45, 50, 62),
+        (35, y),
+        (395, y),
+        1
+    )
+
+
+# ==================================================
+# RENDER ONE FRAME
+# ==================================================
+
+def render_frame(predictions, rms):
+    """
+    Render one complete mobile Spectra frame.
+
+    Parameters
+    ----------
+    predictions:
+        List of dictionaries, for example:
+
+        [
+            {
+                "category": "Clapping",
+                "display_label": "Clapping",
+                "confidence": 0.90,
+            }
+        ]
+
+    rms:
+        Current audio RMS intensity.
+
+    Returns
+    -------
+    numpy.ndarray
+        RGB image ready for st.image().
+    """
+
+    rms = float(rms)
+
+
+    # ==================================================
+    # 1. NORMALIZE MODEL OUTPUT
+    # ==================================================
+
+    active_sounds = []
+
+
+    for prediction in predictions:
+
+        category = prediction.get(
+            "category",
+            prediction.get("class_name")
+        )
+
+
+        display_label = prediction.get(
+            "display_label",
+            prediction.get(
+                "class_name",
+                category
+            )
+        )
+
+
+        confidence = float(
+            prediction.get(
+                "confidence",
+                0.0
+            )
+        )
+
+
+        confidence = max(
+            0.0,
+            min(confidence, 1.0)
+        )
+
+
+        if category in CATEGORY_IMAGES:
+
+            active_sounds.append({
+                "category": category,
+                "display_label": display_label,
+                "confidence": confidence,
+            })
+
+
+    # --------------------------------------------------
+    # Sort strongest prediction first
+    # --------------------------------------------------
+
+    active_sounds.sort(
+        key=lambda sound: sound["confidence"],
+        reverse=True,
+    )
+
+
+    # We display maximum three sounds
+    active_sounds = active_sounds[:3]
+
+
+    # ==================================================
+    # 2. RMS -> PARTICLE GENERATION
+    # ==================================================
+
+    if rms >= 0.05 and active_sounds:
+
+        if rms < 0.065:
+            particle_probability = 0.15
+
+        elif rms < 0.08:
+            particle_probability = 0.40
+
+        else:
+            particle_probability = 0.80
+
+
+        if random.random() < particle_probability:
+
+            for index, sound in enumerate(active_sounds):
+
+                category = sound["category"]
+
+                x, y = SOUND_POSITIONS[index]
+
+
+                angle = random.uniform(
+                    0,
+                    2 * math.pi
+                )
+
+
+                speed = random.uniform(
+                    0.8,
+                    1.5 + rms * 15
+                )
+
+
+                particles.append({
+                    "x": float(x),
+                    "y": float(y),
+
+                    "vx": (
+                        math.cos(angle)
+                        * speed
+                    ),
+
+                    "vy": (
+                        math.sin(angle)
+                        * speed
+                    ),
+
+                    "life": 55,
+
+                    "color": CATEGORY_COLORS[
+                        category
+                    ],
+                })
+
+
+    # ==================================================
+    # 3. CREATE HEADLESS SURFACE
+    # ==================================================
+
+    surface = pygame.Surface(
+        (SCREEN_WIDTH, SCREEN_HEIGHT)
+    )
+
+
+    # ==================================================
+    # 4. BACKGROUND
+    # ==================================================
+
+    surface.fill(
+        (5, 7, 12)
+    )
+
+
+    # Background artwork behind hero area
+    surface.blit(
+        BACKGROUND_IMAGE,
+        (0, 125)
+    )
+
+
+    surface.blit(
+        BACKGROUND_OVERLAY,
+        (0, 0)
+    )
+
+
+    # ==================================================
+    # 5. HEADER
+    # ==================================================
+
+    title_text = title_font.render(
+        "SPECTRA AI",
+        True,
+        (245, 245, 250)
+    )
+
+
+    title_rect = title_text.get_rect(
+        center=(215, 35)
+    )
+
+
+    surface.blit(
+        title_text,
+        title_rect
+    )
+
+
+    subtitle_text = subtitle_font.render(
+        "Visualize your surrounding's sounds",
+        True,
+        (155, 160, 175)
+    )
+
+
+    subtitle_rect = subtitle_text.get_rect(
+        center=(215, 66)
+    )
+
+
+    surface.blit(
+        subtitle_text,
+        subtitle_rect
+    )
+
+
+    # ==================================================
+    # 6. LISTENING STATUS
+    # ==================================================
+
+    status_y = 101
+
+
+    pygame.draw.circle(
+        surface,
+        (30, 220, 130),
+        (169, status_y),
+        5
+    )
+
+
+    listening_text = small_font.render(
+        "LISTENING",
+        True,
+        (185, 190, 205)
+    )
+
+
+    surface.blit(
+        listening_text,
+        (182, status_y - 8)
+    )
+
+
+    draw_divider(
+        surface,
+        125
+    )
+
+
+    # ==================================================
+    # 7. DRAW SOUND PREDICTIONS
+    # ==================================================
+
+    for index, sound in enumerate(active_sounds):
+
+        category = sound["category"]
+        display_label = sound["display_label"]
+        confidence = sound["confidence"]
+
+        color = CATEGORY_COLORS[category]
+        image = CATEGORY_IMAGES[category]
+
+
+        # --------------------------------------------------
+        # HERO SOUND
+        # --------------------------------------------------
+
+        if index == 0:
+
+            x, y = HERO_POSITION
+
+            base_size = 55
+            confidence_size = 45
+
+            percentage_font = hero_percentage_font
+            name_font = hero_name_font
+            category_label_font = hero_category_font
+
+
+        # --------------------------------------------------
+        # SECONDARY SOUNDS
+        # --------------------------------------------------
+
+        else:
+
+            x, y = SECONDARY_POSITIONS[
+                index - 1
+            ]
+
+            base_size = 34
+            confidence_size = 24
+
+            percentage_font = secondary_percentage_font
+            name_font = secondary_name_font
+            category_label_font = secondary_category_font
+
+
+        # ==================================================
+        # 8. PERSISTENT CONFIDENCE ANIMATION
+        # ==================================================
+
+        # Use position + category as the state key.
+        #
+        # This is important because the same category can
+        # move between hero and secondary positions.
+        state_key = (
+            index,
+            category
+        )
+
+
+        if state_key not in shape_states:
+
+            shape_states[state_key] = {
+                "size": float(
+                    base_size * 0.70
+                ),
+                "alpha": 60.0,
+            }
+
+
+        state = shape_states[
+            state_key
+        ]
+
+
+        target_size = (
+            base_size
+            + confidence * confidence_size
+        )
+
+
+        target_alpha = (
+            130
+            + confidence * 125
+        )
+
+
+        state["size"] = lerp(
+            state["size"],
+            target_size,
+            0.15,
+        )
+
+
+        state["alpha"] = lerp(
+            state["alpha"],
+            target_alpha,
+            0.15,
+        )
+
+
+        size = int(
+            state["size"]
+        )
+
+
+        alpha = int(
+            max(
+                0,
+                min(
+                    state["alpha"],
+                    255
+                )
+            )
+        )
+
+
+        # ==================================================
+        # 9. ICON
+        # ==================================================
+
+        draw_floating_icon(
+            surface,
+            image,
+            (x, y),
+            size,
+            color,
+            alpha,
+            confidence,
+        )
+
+
+        # ==================================================
+        # 10. LABELS
+        # ==================================================
+
+        if index == 0:
+
+            # ----------------------------------------------
+            # Hero sound name
+            # ----------------------------------------------
+
+            sound_name = name_font.render(
+                display_label.upper(),
+                True,
+                (245, 245, 250)
+            )
+
+
+            sound_rect = sound_name.get_rect(
+                center=(x, 405)
+            )
+
+
+            surface.blit(
+                sound_name,
+                sound_rect
+            )
+
+
+            # ----------------------------------------------
+            # Hero category
+            # ----------------------------------------------
+
+            category_text = category_label_font.render(
+                category.upper(),
+                True,
+                color
+            )
+
+
+            category_rect = category_text.get_rect(
+                center=(x, 433)
+            )
+
+
+            surface.blit(
+                category_text,
+                category_rect
+            )
+
+
+            # ----------------------------------------------
+            # Hero confidence
+            # ----------------------------------------------
+
+            percentage_text = percentage_font.render(
+                f"{confidence * 100:.0f}%",
+                True,
+                color
+            )
+
+
+            percentage_rect = percentage_text.get_rect(
+                center=(x, 467)
+            )
+
+
+            surface.blit(
+                percentage_text,
+                percentage_rect
+            )
+
+
+            confidence_text = confidence_label_font.render(
+                "CONFIDENCE",
+                True,
+                (145, 150, 165)
+            )
+
+
+            confidence_rect = confidence_text.get_rect(
+                center=(x, 492)
+            )
+
+
+            surface.blit(
+                confidence_text,
+                confidence_rect
+            )
+
+
+        else:
+
+            # ----------------------------------------------
+            # Secondary sound name
+            # ----------------------------------------------
+
+            sound_name = name_font.render(
+                display_label.upper(),
+                True,
+                (245, 245, 250)
+            )
+
+
+            sound_rect = sound_name.get_rect(
+                center=(x, 605)
+            )
+
+
+            surface.blit(
+                sound_name,
+                sound_rect
+            )
+
+
+            # ----------------------------------------------
+            # Secondary confidence
+            # ----------------------------------------------
+
+            percentage_text = percentage_font.render(
+                f"{confidence * 100:.0f}%",
+                True,
+                color
+            )
+
+
+            percentage_rect = percentage_text.get_rect(
+                center=(x, 636)
+            )
+
+
+            surface.blit(
+                percentage_text,
+                percentage_rect
+            )
+
+
+            # ----------------------------------------------
+            # Secondary category
+            # ----------------------------------------------
+
+            category_text = category_label_font.render(
+                category.upper(),
+                True,
+                color
+            )
+
+
+            category_rect = category_text.get_rect(
+                center=(x, 658)
+            )
+
+
+            surface.blit(
+                category_text,
+                category_rect
+            )
+
+
+    # ==================================================
+    # 11. PARTICLES
+    # ==================================================
+
+    particle_size = max(
+        3,
+        int(
+            3 + rms * 10
+        )
+    )
+
+
+    for particle in particles:
+
+        # Move
+        particle["x"] += particle["vx"]
+        particle["y"] += particle["vy"]
+
+        # Age
+        particle["life"] -= 1
+
+
+        # Fade
+        particle_alpha = int(
+            255
+            * max(
+                0,
+                particle["life"] / 55
+            )
+        )
+
+
+        particle_surface = pygame.Surface(
+            (12, 12),
+            pygame.SRCALPHA
+        )
+
+
+        pygame.draw.circle(
+            particle_surface,
+            (
+                *particle["color"],
+                particle_alpha
+            ),
+            (6, 6),
+            particle_size,
+        )
+
+
+        surface.blit(
+            particle_surface,
+            (
+                int(particle["x"] - 6),
+                int(particle["y"] - 6)
+            )
+        )
+
+
+    # Remove dead particles
+    particles[:] = [
+        particle
+        for particle in particles
+        if particle["life"] > 0
+    ]
+
+
+    # ==================================================
+    # 12. BOTTOM AUDIO LEVEL
+    # ==================================================
+
+    draw_divider(
+        surface,
+        685
+    )
+
+
+    audio_label = small_font.render(
+        "AUDIO LEVEL",
+        True,
+        (155, 160, 175)
+    )
+
+
+    surface.blit(
+        audio_label,
+        (35, 705)
+    )
+
+
+    rms_value = rms_font.render(
+        f"{rms:.2f}",
+        True,
+        (235, 235, 245)
+    )
+
+
+    rms_rect = rms_value.get_rect(
+        right=395,
+        centery=713
+    )
+
+
+    surface.blit(
+        rms_value,
+        rms_rect
+    )
+
+
+    # --------------------------------------------------
+    # Horizontal RMS meter
+    # --------------------------------------------------
+
+    meter_x = 35
+    meter_y = 738
+
+    meter_width = 360
+    meter_height = 8
+
+
+    pygame.draw.rect(
+        surface,
+        (40, 45, 55),
+        (
+            meter_x,
+            meter_y,
+            meter_width,
+            meter_height
+        ),
+        border_radius=4
+    )
+
+
+    rms_normalized = max(
+        0.0,
+        min(
+            rms / 0.10,
+            1.0
+        )
+    )
+
+
+    fill_width = int(
+        meter_width
+        * rms_normalized
+    )
+
+
+    if fill_width > 0:
+
+        pygame.draw.rect(
+            surface,
+            (30, 220, 130),
+            (
+                meter_x,
+                meter_y,
+                fill_width,
+                meter_height
+            ),
+            border_radius=4
+        )
+
+
+    # ==================================================
+    # 13. SURFACE -> NUMPY RGB
+    # ==================================================
+
+    frame = pygame.surfarray.array3d(
+        surface
+    )
+
+
+    # Pygame = width × height × RGB
+    # Streamlit = height × width × RGB
+    frame = np.swapaxes(
+        frame,
+        0,
+        1
+    )
+
+
+    return frame

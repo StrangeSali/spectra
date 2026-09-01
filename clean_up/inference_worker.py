@@ -3,8 +3,13 @@ import time
 from collections import deque, Counter
 import numpy as np
 import pyaudio
+<<<<<<< HEAD:spectra/models/inference_worker.py
+from spectra.models.classifier import YAMNET_MODEL, CLASS_NAMES
+from spectra.processing.category_mapping import map_to_category_smooth, DEFAULT_CATEGORY
+=======
 from models.classifier import yamnet_model, class_names
 from spectra.models.category_mapping import map_to_category_smooth, DEFAULT_CATEGORY
+>>>>>>> d2add0503332544e3c2c4e72713fc013b059cc84:clean_up/inference_worker.py
 
 # --- YAMNET COMPATIBLE CONFIGURATION ---
 SAMPLE_RATE = 16000
@@ -68,10 +73,10 @@ class YAMNetInferenceWorker(threading.Thread):
         pa.terminate()
 
     def _run_inference(self, waveform):
-        scores, embeddings, spectrogram = yamnet_model(waveform)
+        scores, embeddings, spectrogram = YAMNET_MODEL(waveform)
         mean_scores = np.mean(scores.numpy(), axis=0)
         top_indices = np.argsort(mean_scores)[::-1][:5]
-        results = [(class_names[i], float(mean_scores[i])) for i in top_indices]
+        results = [(CLASS_NAMES[i], float(mean_scores[i])) for i in top_indices]
 
         top_class_name, top_confidence = results[0]
 
@@ -100,6 +105,13 @@ class YAMNetInferenceWorker(threading.Thread):
         with self.lock:
             return self.latest_predictions.copy()
 
+    def get_rms(self):
+        with self.lock:
+            return float(
+                np.sqrt(
+                    np.mean(self.rolling_buffer ** 2)
+                    )
+                )
     def get_latest_category(self):
         """Thread-safe read of the current smoothed category (Alert, Human, ...)."""
         with self.lock:

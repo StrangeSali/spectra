@@ -108,6 +108,30 @@ CATEGORY_COLORS = {
 
 }
 ```
+# Spectra Graphics Input Contract
+
+The graphics layer should receive a list of up to 3 active sound predictions.
+
+## Expected structure
+
+```python
+active_sounds = [
+    {
+        "category": "Human",
+        "class_name": "Clapping",
+        "confidence": 0.88
+    },
+    {
+        "category": "Alarms",
+        "class_name": "Siren",
+        "confidence": 0.81
+    },
+    {
+        "category": "Traffic",
+        "class_name": "Car",
+        "confidence": 0.67
+    }
+]
 
 ---
 
