@@ -9,6 +9,7 @@ import time
 
 import av
 import numpy as np
+import requests
 import streamlit as st
 import websocket
 
@@ -18,9 +19,7 @@ from streamlit_webrtc import (
     webrtc_streamer,
 )
 
-from spectra.graphics.renderer import (
-    render_frame
-)
+from spectra.graphics.renderer import render_frame
 
 
 # ==================================================
@@ -30,23 +29,28 @@ from spectra.graphics.renderer import (
 SAMPLE_RATE = 16000
 
 TARGET_FPS = 12
+FRAME_DURATION = 1 / TARGET_FPS
 
-FRAME_DURATION = (
-    1 / TARGET_FPS
+# How often we ask the API for its latest prediction.
+POLL_INTERVAL = 0.25
+
+
+# ==================================================
+# API URLS
+# ==================================================
+
+# Deployed API
+API_BASE_URL = os.getenv(
+    "SPECTRA_API_URL",
+    "https://spectra-1087886990522.europe-west1.run.app",
 )
 
-
-# Local development:
-#
-# ws://127.0.0.1:8001/predict-mic
-#
-# Later, when API is deployed, set:
-#
-# SPECTRA_WS_URL=wss://your-api.../predict-mic
-
+# WebSocket used to SEND live microphone audio.
 SPECTRA_WS_URL = os.getenv(
     "SPECTRA_WS_URL",
-    "ws://127.0.0.1:8001/predict-mic",
+    API_BASE_URL.replace("https://", "wss://")
+    .replace("http://", "ws://")
+    + "/predict-mic",
 )
 
 
@@ -94,26 +98,25 @@ st.markdown(
 )
 
 
-st.title(
-    "Spectra AI"
-)
+st.title("Spectra AI")
 
-
-st.caption(
-    "Real-time sound analysis"
-)
+st.caption("Real-time sound analysis")
 
 
 # ==================================================
 # API -> GRAPHICS ADAPTER
 # ==================================================
 
-def adapt_predictions(
-    api_predictions,
-):
+def adapt_predictions(api_predictions):
+    """
+    Convert API predictions into the simple structure
+    expected by renderer.py.
+
+    We keep only the strongest prediction for each
+    visual category.
+    """
 
     if not api_predictions:
-
         return []
 
 
@@ -128,21 +131,23 @@ def adapt_predictions(
         )
 
 
-        confidence = float(
-            prediction.get(
-                "confidence",
-                0.0,
-            )
-        )
-
-
         if category == "Background":
             continue
 
 
-        # ------------------------------------------
-        # KEEP SPECIFIC HYBRID LABEL
-        # ------------------------------------------
+        try:
+
+            confidence = float(
+                prediction.get(
+                    "confidence",
+                    0.0,
+                )
+            )
+
+        except (TypeError, ValueError):
+
+            confidence = 0.0
+
 
         display_label = prediction.get(
             "display_label",
@@ -153,22 +158,18 @@ def adapt_predictions(
         )
 
 
-        current = (
-            best_by_category.get(
-                category
-            )
+        current = best_by_category.get(
+            category
         )
 
 
         if (
             current is None
-            or confidence
-            > current["confidence"]
+            or confidence > current["confidence"]
         ):
 
-            best_by_category[
-                category
-            ] = {
+            best_by_category[category] = {
+
                 "category":
                     category,
 
@@ -177,11 +178,6 @@ def adapt_predictions(
 
                 "confidence":
                     confidence,
-
-                "source":
-                    prediction.get(
-                        "source"
-                    ),
             }
 
 
@@ -192,37 +188,34 @@ def adapt_predictions(
 
     adapted.sort(
         key=lambda prediction:
-            prediction[
-                "confidence"
-            ],
+            prediction["confidence"],
         reverse=True,
     )
 
 
-    # ----------------------------------------------
-    # PRIMARY SOUND ALWAYS ALLOWED
-    # ----------------------------------------------
-
     if not adapted:
-
         return []
 
+
+    # --------------------------------------------------
+    # PRIMARY SOUND
+    # --------------------------------------------------
 
     displayed = [
         adapted[0]
     ]
 
 
-    # ----------------------------------------------
-    # SECONDARY SOUNDS MUST BE STRONG
-    # ----------------------------------------------
+    # --------------------------------------------------
+    # SECONDARY SOUNDS
+    #
+    # Only show secondary sounds if confidence >= 40%.
+    # --------------------------------------------------
 
     for prediction in adapted[1:]:
 
         if (
-            prediction[
-                "confidence"
-            ]
+            prediction["confidence"]
             >= 0.40
         ):
 
@@ -240,36 +233,32 @@ def adapt_predictions(
 
 # ==================================================
 # WEBSOCKET CLIENT
+#
+# RESPONSIBILITY:
+#
+# Browser audio
+#      ↓
+# WebSocket
+#      ↓
+# /predict-mic
+#
+# Predictions themselves will be POLLED separately.
 # ==================================================
 
 class SpectraWebSocketClient:
 
-    def __init__(
-        self,
-        url,
-    ):
+    def __init__(self, url):
 
         self.url = url
 
         self.ws = None
-
         self.thread = None
 
-        self.latest_predictions = []
-
-        self.latest_rms = 0.0
-
-        self.status = (
-            "connecting"
-        )
-
         self.session_id = None
-
         self.connected = False
+        self.status = "connecting"
 
-        self.lock = (
-            threading.Lock()
-        )
+        self.lock = threading.Lock()
 
 
     # ==================================================
@@ -282,7 +271,6 @@ class SpectraWebSocketClient:
             self.thread is not None
             and self.thread.is_alive()
         ):
-
             return
 
 
@@ -316,14 +304,11 @@ class SpectraWebSocketClient:
         with self.lock:
 
             self.connected = True
-
-            self.status = (
-                "connected"
-            )
+            self.status = "connected"
 
 
         print(
-            "Connected to Spectra API"
+            "Connected to Spectra live API"
         )
 
 
@@ -332,6 +317,15 @@ class SpectraWebSocketClient:
         ws,
         message,
     ):
+        """
+        The API sends WebSocket messages too.
+
+        For this architecture we mainly use them to
+        obtain the session_id.
+
+        Predictions are deliberately fetched separately
+        using GET /predict-mic/{session_id}/latest.
+        """
 
         try:
 
@@ -354,23 +348,19 @@ class SpectraWebSocketClient:
         )
 
 
-        # ------------------------------------------
-        # CONNECTED
-        # ------------------------------------------
+        # --------------------------------------------------
+        # INITIAL CONNECTION
+        # --------------------------------------------------
 
         if status == "connected":
 
             with self.lock:
 
-                self.session_id = (
-                    data.get(
-                        "session_id"
-                    )
+                self.session_id = data.get(
+                    "session_id"
                 )
 
-                self.status = (
-                    "connected"
-                )
+                self.status = "connected"
 
 
             print(
@@ -379,63 +369,9 @@ class SpectraWebSocketClient:
             )
 
 
-        # ------------------------------------------
-        # CALIBRATING
-        # ------------------------------------------
-
-        elif status == "calibrating":
-
-            with self.lock:
-
-                self.status = (
-                    "calibrating"
-                )
-
-                self.latest_predictions = []
-
-                self.latest_rms = float(
-                    data.get(
-                        "rms",
-                        0.0,
-                    )
-                )
-
-
-        # ------------------------------------------
-        # PREDICTIONS
-        # ------------------------------------------
-
-        elif status == "processing":
-
-            predictions = data.get(
-                "predictions",
-                [],
-            )
-
-
-            with self.lock:
-
-                self.status = (
-                    "listening"
-                    if not predictions
-                    else "sound"
-                )
-
-                self.latest_predictions = (
-                    predictions
-                )
-
-                self.latest_rms = float(
-                    data.get(
-                        "rms",
-                        self.latest_rms,
-                    )
-                )
-
-
-        # ------------------------------------------
-        # ERROR
-        # ------------------------------------------
+        # --------------------------------------------------
+        # API ERROR
+        # --------------------------------------------------
 
         elif status == "error":
 
@@ -452,6 +388,25 @@ class SpectraWebSocketClient:
             )
 
 
+        # --------------------------------------------------
+        # PROCESSING
+        #
+        # We deliberately DON'T store predictions here.
+        #
+        # They will be retrieved using HTTP GET.
+        # --------------------------------------------------
+
+        elif status == "processing":
+
+            with self.lock:
+
+                self.status = "processing"
+
+
+    # ==================================================
+    # CLOSE / ERROR
+    # ==================================================
+
     def _on_close(
         self,
         ws,
@@ -462,10 +417,7 @@ class SpectraWebSocketClient:
         with self.lock:
 
             self.connected = False
-
-            self.status = (
-                "disconnected"
-            )
+            self.status = "disconnected"
 
 
         print(
@@ -547,15 +499,9 @@ class SpectraWebSocketClient:
         with self.lock:
 
             return {
-                "predictions":
-                    list(
-                        self.latest_predictions
-                    ),
 
-                "rms":
-                    float(
-                        self.latest_rms
-                    ),
+                "session_id":
+                    self.session_id,
 
                 "status":
                     self.status,
@@ -574,11 +520,9 @@ class SpectraWebSocketClient:
         if self.ws is not None:
 
             try:
-
                 self.ws.close()
 
             except Exception:
-
                 pass
 
 
@@ -588,7 +532,7 @@ class SpectraWebSocketClient:
 
 
 # ==================================================
-# ONE CLIENT PER STREAMLIT SESSION
+# ONE WEBSOCKET CLIENT PER STREAMLIT SESSION
 # ==================================================
 
 if (
@@ -612,7 +556,49 @@ ws_client.connect()
 
 
 # ==================================================
+# STREAMLIT STATE
+# ==================================================
+
+if "latest_predictions" not in st.session_state:
+
+    st.session_state[
+        "latest_predictions"
+    ] = []
+
+
+if "latest_rms" not in st.session_state:
+
+    st.session_state[
+        "latest_rms"
+    ] = 0.0
+
+
+if "last_poll_time" not in st.session_state:
+
+    st.session_state[
+        "last_poll_time"
+    ] = 0.0
+
+
+if "latest_prediction_timestamp" not in st.session_state:
+
+    st.session_state[
+        "latest_prediction_timestamp"
+    ] = None
+
+
+# ==================================================
 # AUDIO PROCESSOR
+#
+# Browser microphone
+#      ↓
+# usually ~48 kHz
+#      ↓
+# PyAV resampling
+#      ↓
+# 16 kHz Float32
+#      ↓
+# WebSocket
 # ==================================================
 
 class SpectraAudioProcessor(
@@ -624,24 +610,10 @@ class SpectraAudioProcessor(
         self.latest_rms = 0.0
 
 
-        # ------------------------------------------
-        # IMPORTANT
-        #
-        # Browser microphones commonly produce
-        # 48 kHz audio.
-        #
-        # Spectra/YAMNet expects 16 kHz.
-        #
-        # PyAV handles the conversion here BEFORE
-        # audio is sent to the API.
-        # ------------------------------------------
-
-        self.resampler = (
-            av.AudioResampler(
-                format="fltp",
-                layout="mono",
-                rate=SAMPLE_RATE,
-            )
+        self.resampler = av.AudioResampler(
+            format="fltp",
+            layout="mono",
+            rate=SAMPLE_RATE,
         )
 
 
@@ -652,6 +624,10 @@ class SpectraAudioProcessor(
 
         try:
 
+            # ==================================================
+            # 1. RESAMPLE TO 16 kHz
+            # ==================================================
+
             resampled_frames = (
                 self.resampler.resample(
                     frame
@@ -660,7 +636,6 @@ class SpectraAudioProcessor(
 
 
             if not resampled_frames:
-
                 return frame
 
 
@@ -691,7 +666,6 @@ class SpectraAudioProcessor(
 
 
             if not chunks:
-
                 return frame
 
 
@@ -700,9 +674,9 @@ class SpectraAudioProcessor(
             )
 
 
-            # --------------------------------------
-            # SAFETY NORMALIZATION
-            # --------------------------------------
+            # ==================================================
+            # 2. SAFETY NORMALIZATION
+            # ==================================================
 
             peak = float(
                 np.max(
@@ -721,9 +695,15 @@ class SpectraAudioProcessor(
                 )
 
 
-            # --------------------------------------
-            # LOCAL RMS
-            # --------------------------------------
+            # ==================================================
+            # 3. LOCAL RMS
+            #
+            # RMS is visual information.
+            #
+            # The current API WebSocket does not include
+            # RMS in the latest-buffer endpoint, so we can
+            # calculate it locally for renderer.py.
+            # ==================================================
 
             self.latest_rms = float(
                 np.sqrt(
@@ -736,9 +716,9 @@ class SpectraAudioProcessor(
             )
 
 
-            # --------------------------------------
-            # SEND 16 kHz FLOAT32 AUDIO
-            # --------------------------------------
+            # ==================================================
+            # 4. SEND AUDIO TO API
+            # ==================================================
 
             ws_client.send_audio(
                 audio
@@ -767,11 +747,15 @@ webrtc_ctx = webrtc_streamer(
     mode=WebRtcMode.SENDONLY,
 
     media_stream_constraints={
+
         "video": False,
 
         "audio": {
+
             "echoCancellation": True,
+
             "noiseSuppression": False,
+
             "autoGainControl": False,
         },
     },
@@ -785,21 +769,86 @@ webrtc_ctx = webrtc_streamer(
 
 
 # ==================================================
-# STATUS
+# API POLLING
+# ==================================================
+
+def ask_api(
+    session_id,
+):
+    """
+    Get the latest prediction already calculated
+    by the API for this microphone session.
+
+    NO inference happens here.
+
+    GET:
+    /predict-mic/{session_id}/latest
+    """
+
+    if not session_id:
+        return None
+
+
+    url = (
+        f"{API_BASE_URL}"
+        f"/predict-mic/"
+        f"{session_id}"
+        f"/latest"
+    )
+
+
+    try:
+
+        response = requests.get(
+            url,
+            timeout=2,
+        )
+
+
+        # --------------------------------------------------
+        # Session exists but has no prediction yet.
+        # --------------------------------------------------
+
+        if response.status_code == 404:
+
+            return None
+
+
+        response.raise_for_status()
+
+
+        return response.json()
+
+
+    except requests.RequestException as error:
+
+        print(
+            "Prediction polling error:",
+            error,
+        )
+
+        return None
+
+
+# ==================================================
+# STATUS + GRAPHICS PLACEHOLDERS
 # ==================================================
 
 status_placeholder = st.empty()
-
-
-# ==================================================
-# GRAPHICS CONTAINER
-# ==================================================
 
 frame_placeholder = st.empty()
 
 
 # ==================================================
-# LIVE GRAPHICS
+# LIVE CONTROLLER LOOP
+#
+# This is essentially your teacher's pseudocode:
+#
+# 1. WebRTC gets audio
+# 2. AudioProcessor sends it
+# 3. We poll latest predictions
+# 4. renderer draws them
+# 5. repeat at steady FPS
 # ==================================================
 
 while True:
@@ -809,56 +858,157 @@ while True:
     )
 
 
-    state = ws_client.get_state()
+    # ==================================================
+    # CURRENT WEBSOCKET STATE
+    # ==================================================
 
-
-    raw_predictions = (
-        state["predictions"]
+    ws_state = (
+        ws_client.get_state()
     )
 
+
+    session_id = (
+        ws_state["session_id"]
+    )
+
+
+    # ==================================================
+    # GET LOCAL RMS FROM AUDIO PROCESSOR
+    # ==================================================
+
+    rms = st.session_state[
+        "latest_rms"
+    ]
+
+
+    if (
+        webrtc_ctx.audio_processor
+        is not None
+    ):
+
+        rms = float(
+            webrtc_ctx
+            .audio_processor
+            .latest_rms
+        )
+
+
+        st.session_state[
+            "latest_rms"
+        ] = rms
+
+
+    # ==================================================
+    # POLL API
+    # ==================================================
+
+    now = time.perf_counter()
+
+
+    if (
+        session_id is not None
+        and (
+            now
+            - st.session_state[
+                "last_poll_time"
+            ]
+            >= POLL_INTERVAL
+        )
+    ):
+
+        result = ask_api(
+            session_id
+        )
+
+
+        if result is not None:
+
+            result_timestamp = (
+                result.get(
+                    "timestamp"
+                )
+            )
+
+
+            # Only adapt/store if this is a new
+            # prediction from the API.
+            if (
+                result_timestamp
+                != st.session_state[
+                    "latest_prediction_timestamp"
+                ]
+            ):
+
+                raw_predictions = (
+                    result.get(
+                        "predictions",
+                        [],
+                    )
+                )
+
+
+                predictions = (
+                    adapt_predictions(
+                        raw_predictions
+                    )
+                )
+
+
+                st.session_state[
+                    "latest_predictions"
+                ] = predictions
+
+
+                st.session_state[
+                    "latest_prediction_timestamp"
+                ] = result_timestamp
+
+
+        st.session_state[
+            "last_poll_time"
+        ] = now
+
+
+    # ==================================================
+    # CURRENT DISPLAY PREDICTIONS
+    # ==================================================
 
     predictions = (
-        adapt_predictions(
-            raw_predictions
-        )
+        st.session_state[
+            "latest_predictions"
+        ]
     )
 
 
-    # ----------------------------------------------
-    # RMS
-    #
-    # Prefer API RMS because it corresponds to the
-    # exact 16 kHz waveform used for inference.
-    # ----------------------------------------------
-
-    rms = float(
-        state["rms"]
-    )
-
-
-    # ----------------------------------------------
+    # ==================================================
     # STATUS MESSAGE
-    # ----------------------------------------------
+    # ==================================================
 
-    if state["status"] == "calibrating":
+    if not webrtc_ctx.state.playing:
 
         status_placeholder.info(
-            "Calibrating background sound… "
-            "keep reasonably quiet for a few seconds."
+            "Start the microphone to begin listening."
         )
 
 
-    elif state["status"] == "error":
-
-        status_placeholder.error(
-            "Could not communicate with Spectra API."
-        )
-
-
-    elif not state["connected"]:
+    elif not ws_state["connected"]:
 
         status_placeholder.warning(
             "Connecting to Spectra…"
+        )
+
+
+    elif session_id is None:
+
+        status_placeholder.info(
+            "Starting Spectra session…"
+        )
+
+
+    elif ws_state["status"] == "error":
+
+        status_placeholder.error(
+            "Could not communicate with Spectra API."
         )
 
 
@@ -868,9 +1018,12 @@ while True:
             predictions[0]
         )
 
+
         status_placeholder.success(
             f"Detected: "
-            f"{primary['display_label']}"
+            f"{primary['display_label']} "
+            f"— "
+            f"{primary['confidence'] * 100:.0f}%"
         )
 
 
@@ -881,9 +1034,9 @@ while True:
         )
 
 
-    # ----------------------------------------------
+    # ==================================================
     # RENDER
-    # ----------------------------------------------
+    # ==================================================
 
     frame = render_frame(
         predictions,
@@ -898,9 +1051,9 @@ while True:
     )
 
 
-    # ----------------------------------------------
-    # FRAME RATE
-    # ----------------------------------------------
+    # ==================================================
+    # KEEP FRAME RATE STEADY
+    # ==================================================
 
     elapsed = (
         time.perf_counter()

@@ -1,8 +1,7 @@
 import json
 import os
-
-import numpy as np
 import pyaudio
+
 import tensorflow_hub as hub
 from tf_keras.models import load_model
 from google.cloud import storage
@@ -12,7 +11,7 @@ from spectra.processing.audio import (
     capture_audio_chunk,
     load_audio_file,
     split_audio_into_windows,
-    preprocess_audio,
+    preprocess_audio
 )
 
 from spectra.processing.yamnet_utils import (
@@ -21,7 +20,7 @@ from spectra.processing.yamnet_utils import (
 
 from spectra.processing.classifier import (
     predict_probabilities,
-    predict_sound,
+    predict_sound
 )
 
 MODEL_BUCKET_NAME = os.getenv(
@@ -45,429 +44,156 @@ AUDIO_FILE = os.getenv(
 
 yamnet_model, classifier_model = load_models()
 
-# ==================================================
-# PROCESS ONE WAVEFORM
-# ==================================================
+# --------------------------------------------------
+# Process one waveform
+# --------------------------------------------------
 
-def process_waveform(
-    waveform,
-):
+def process_waveform(waveform):
 
     waveform, rms = preprocess_audio(
         waveform
     )
 
-
-    yamnet_scores, embedding = (
-        extract_features(
-            yamnet_model,
-            waveform,
-        )
+    scores, embedding = extract_features(
+        yamnet_model,
+        waveform
     )
 
-
-    esc50_probabilities = (
-        predict_probabilities(
-            embedding,
-            classifier_model,
-        )
+    probabilities = predict_probabilities(
+        embedding,
+        classifier_model
     )
 
-
-    return (
-        esc50_probabilities,
-        yamnet_scores,
-        rms,
-    )
+    return probabilities
 
 
-# ==================================================
-# HYBRID PREDICTION
-# ==================================================
-
-def hybrid_predict(
-    esc50_probabilities,
-    yamnet_scores,
-    max_classes=3,
-):
-    """
-    Hybrid strategy:
-
-    1. Check whether YAMNet strongly detects speech.
-    2. If yes:
-           return Human / People talking.
-    3. Otherwise:
-           use our trained ESC-50 classifier.
-
-    YAMNet is therefore a specialist detector,
-    not the main Spectra classifier.
-    """
-
-    (
-        is_speech,
-        speech_confidence,
-        yamnet_speech_class,
-    ) = detect_speech(
-        yamnet_scores,
-        yamnet_class_names,
-        threshold=(
-            YAMNET_SPEECH_THRESHOLD
-        ),
-    )
-
-
-    # ==================================================
-    # SPEECH OVERRIDE
-    # ==================================================
-
-    if is_speech:
-
-        return [
-            {
-                "class_name":
-                    "speech",
-
-                "raw_class_name":
-                    yamnet_speech_class,
-
-                "display_label":
-                    "People talking",
-
-                "category":
-                    "Human",
-
-                "confidence":
-                    round(
-                        speech_confidence,
-                        2,
-                    ),
-
-                "source":
-                    "yamnet",
-            }
-        ]
-
-
-    # ==================================================
-    # ESC-50 CLASSIFICATION
-    # ==================================================
-
-    results = predict_sound(
-        esc50_probabilities,
-        max_classes=max_classes,
-        confidence_threshold=0.0,
-    )
-
-
-    # Mark where the prediction came from.
-    for result in results:
-
-        result["source"] = (
-            "esc50"
-        )
-
-
-    return results
-
-
-# ==================================================
-# PROCESS MICROPHONE
-# ==================================================
+# --------------------------------------------------
+# Process microphone
+# --------------------------------------------------
 
 def process_microphone(
     mic,
-    chunk_size=MIC_CHUNK_SIZE,
+    chunk_size=1024
 ):
 
     waveform = capture_audio_chunk(
         mic,
-        chunk_size,
+        chunk_size
     )
 
-
-    (
-        esc50_probabilities,
-        yamnet_scores,
-        rms,
-    ) = process_waveform(
+    probabilities = process_waveform(
         waveform
     )
 
-
-    result = hybrid_predict(
-        esc50_probabilities,
-        yamnet_scores,
-        max_classes=3,
+    result = predict_sound(
+        probabilities
     )
 
-
-    return (
-        result,
-        rms,
-    )
+    return result
 
 
-# ==================================================
-# RUN MICROPHONE CONTINUOUSLY
-# ==================================================
+# --------------------------------------------------
+# Run microphone continuously
+# --------------------------------------------------
 
-def run_microphone(
-    mic,
-):
+def run_microphone(mic):
 
     while True:
 
-        predictions, rms = (
-            process_microphone(
-                mic
-            )
+        result = process_microphone(
+            mic
         )
-
-
-        predictions = (
-            make_json_serializable(
-                predictions
-            )
-        )
-
-
-        rms = float(
-            rms
-        )
-
 
         print(
-            "Predictions:",
-            predictions,
+            json.dumps(result)
         )
 
 
-        print(
-            "RMS:",
-            rms,
-        )
-
-
-        print(
-            json.dumps(
-                {
-                    "predictions":
-                        predictions,
-
-                    "rms":
-                        rms,
-                },
-                indent=2,
-            )
-        )
-
-
-# ==================================================
-# PROCESS AUDIO FILE
-# ==================================================
+# --------------------------------------------------
+# Process audio file
+# --------------------------------------------------
 
 def process_file(
     filepath,
     window_seconds=1.0,
     overlap=0.5,
     max_classes=3,
-    confidence_threshold=0.20,
+    confidence_threshold=0.20
 ):
 
     print(
-        f"Loading audio file: "
-        f"{filepath}"
+        f"Loading audio file: {filepath}"
     )
-
 
     waveform = load_audio_file(
         filepath
     )
 
-
     duration = (
-        len(waveform)
-        / SAMPLE_RATE
+        len(waveform) / 16000
     )
-
 
     print(
-        f"Audio duration: "
-        f"{duration:.2f}s"
+        f"Audio duration: {duration:.2f}s"
     )
-
 
     windows = split_audio_into_windows(
         waveform,
-        sample_rate=SAMPLE_RATE,
+        sample_rate=16000,
         window_seconds=window_seconds,
-        overlap=overlap,
+        overlap=overlap
     )
-
 
     print(
-        f"Processing "
-        f"{len(windows)} "
-        f"windows..."
+        f"Processing {len(windows)} windows..."
     )
 
+    all_probabilities = []
 
-    all_esc50_probabilities = []
-
-    all_yamnet_scores = []
-
-
-    for i, window in enumerate(
-        windows
-    ):
+    for i, window in enumerate(windows):
 
         print(
             f"Processing window "
-            f"{i + 1}/"
-            f"{len(windows)}"
+            f"{i + 1}/{len(windows)}"
         )
 
-
-        (
-            esc50_probabilities,
-            yamnet_scores,
-            rms,
-        ) = process_waveform(
+        probabilities = process_waveform(
             window
         )
 
-
-        all_esc50_probabilities.append(
-            esc50_probabilities
+        all_probabilities.append(
+            probabilities
         )
 
-
-        # Average the YAMNet class scores
-        # within each one-second window.
-        yamnet_mean_scores = (
-            np.asarray(
-                yamnet_scores
-            ).mean(
-                axis=0
-            )
-        )
-
-
-        all_yamnet_scores.append(
-            yamnet_mean_scores
-        )
-
-
-    if not all_esc50_probabilities:
-
-        return []
-
-
-    # ==================================================
-    # ESC-50 AVERAGE
-    # ==================================================
-
-    all_esc50_probabilities = (
-        np.asarray(
-            all_esc50_probabilities,
-            dtype=np.float32,
-        )
+    # Convert to numpy array
+    all_probabilities = __import__(
+        "numpy"
+    ).array(
+        all_probabilities
     )
 
-
-    mean_esc50_probabilities = (
-        all_esc50_probabilities.mean(
+    # Average predictions across windows
+    mean_probabilities = (
+        all_probabilities.mean(
             axis=0
         )
     )
 
-
-    # ==================================================
-    # YAMNET AVERAGE
-    # ==================================================
-
-    all_yamnet_scores = np.asarray(
-        all_yamnet_scores,
-        dtype=np.float32,
-    )
-
-
-    mean_yamnet_scores = (
-        all_yamnet_scores.mean(
-            axis=0
-        )
-    )
-
-
-    # ==================================================
-    # HYBRID FINAL RESULT
-    # ==================================================
-
-    results = hybrid_predict(
-        mean_esc50_probabilities,
-        mean_yamnet_scores,
+    # Get final top 3
+    results = predict_sound(
+        mean_probabilities,
         max_classes=max_classes,
+        confidence_threshold=confidence_threshold
     )
 
-
-    # Apply confidence threshold for file mode.
-    results = [
-        result
-        for result in results
-        if (
-            float(
-                result.get(
-                    "confidence",
-                    0.0,
-                )
-            )
-            >= confidence_threshold
-        )
-    ]
+    return results
 
 
-    return make_json_serializable(
-        results
-    )
-
-
-# ==================================================
-# DEBUG YAMNET
-# ==================================================
-
-def print_yamnet_debug(
-    yamnet_scores,
-    top_k=8,
-):
-
-    top_classes = (
-        get_top_yamnet_classes(
-            yamnet_scores,
-            yamnet_class_names,
-            top_k=top_k,
-        )
-    )
-
-
-    print(
-        "\n--- YAMNet ---"
-    )
-
-
-    for item in top_classes:
-
-        print(
-            f"{item['class_name']}: "
-            f"{item['confidence']:.3f}"
-        )
-
-
-# ==================================================
-# MAIN
-# ==================================================
+# --------------------------------------------------
+# Main
+# --------------------------------------------------
 
 if __name__ == "__main__":
-
 
     # ==================================================
     # FILE MODE
@@ -475,29 +201,25 @@ if __name__ == "__main__":
 
     if AUDIO_SOURCE == "file":
 
-
         if not AUDIO_FILE:
 
             raise ValueError(
-                "AUDIO_FILE must be "
-                "provided when "
-                "AUDIO_SOURCE=file"
+                "AUDIO_FILE must be provided "
+                "when AUDIO_SOURCE=file"
             )
-
 
         result = process_file(
             AUDIO_FILE,
             window_seconds=1.0,
             overlap=0.5,
             max_classes=3,
-            confidence_threshold=0.20,
+            confidence_threshold=0.20
         )
-
 
         print(
             json.dumps(
                 result,
-                indent=2,
+                indent=2
             )
         )
 
@@ -508,18 +230,15 @@ if __name__ == "__main__":
 
     elif AUDIO_SOURCE == "mic":
 
-
         audio = pyaudio.PyAudio()
-
 
         mic = audio.open(
             format=pyaudio.paFloat32,
             channels=1,
-            rate=SAMPLE_RATE,
+            rate=16000,
             input=True,
-            frames_per_buffer=1024,
+            frames_per_buffer=1024
         )
-
 
         try:
 
@@ -527,26 +246,19 @@ if __name__ == "__main__":
                 mic
             )
 
-
         except KeyboardInterrupt:
 
             print(
                 "\nStopping..."
             )
 
-
         finally:
 
             mic.stop_stream()
-
             mic.close()
 
             audio.terminate()
 
-
-    # ==================================================
-    # INVALID MODE
-    # ==================================================
 
     else:
 
