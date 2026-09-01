@@ -153,43 +153,103 @@ st.markdown(
 )
 
 URL = "https://spectra-1087886990522.europe-west1.run.app/predict"
+# -----------------------------------------------------------------------
+# INPUT METHOD
+# -----------------------------------------------------------------------
 
-with st.container(border=True):
+st.markdown(
+    '<div class="section-label">Choose Input Method</div>',
+    unsafe_allow_html=True,
+)
 
-    st.markdown(
-        '<div class="section-label">Audio Recorder</div>',
-        unsafe_allow_html=True,
-    )
+if "input_mode" not in st.session_state:
+    st.session_state.input_mode = None
 
-    audio_value = st.audio_input(
-    "Click on the microphone icon to start recording",
-    key="my_audio_input")
+col1, col2 = st.columns(2)
 
-    audio_bytes = None
-    if audio_value is not None:
-        audio_bytes = audio_value.getvalue()
+with col1:
+    if st.button("🎤 Record Audio", use_container_width=True):
+        st.session_state.input_mode = "record"
 
-        if len(audio_bytes) == 0:
+with col2:
+    if st.button("📁 Upload File", use_container_width=True):
+        st.session_state.input_mode = "upload"
 
-            st.error(
-                "I'm sorry, but I don't have access to your microphone. "
-                "Please check your browser permissions and try again."
-            )
+audio_bytes = None
 
-            audio_bytes = None
+if st.session_state.input_mode == "record":
 
+    with st.container(border=True):
 
-        else:
+        st.markdown(
+            '<div class="section-label">Audio Recorder</div>',
+            unsafe_allow_html=True,
+        )
+
+        audio_value = st.audio_input(
+            "Click on the microphone icon to start recording",
+            key="my_audio_input"
+        )
+
+        if audio_value is not None:
+
+            audio_bytes = audio_value.getvalue()
+
+            if len(audio_bytes) == 0:
+
+                st.error(
+                    "I'm sorry, but I don't have access to your microphone. "
+                    "Please check your browser permissions and try again."
+                )
+
+                audio_bytes = None
+
+            else:
+
+                st.audio(
+                    audio_bytes,
+                    format="audio/wav",
+                )
+
+elif st.session_state.input_mode == "upload":
+
+    with st.container(border=True):
+
+        st.markdown(
+            '<div class="section-label">Upload Audio File</div>',
+            unsafe_allow_html=True,
+        )
+
+        uploaded_file = st.file_uploader(
+            "Choose a WAV file",
+            type=["wav"],
+            key="uploaded_file"
+        )
+
+        if uploaded_file is not None:
+
+            audio_bytes = uploaded_file.getvalue()
 
             st.audio(
                 audio_bytes,
                 format="audio/wav",
             )
+
 col1, col2  = st.columns(2)
 with col2:
-    if st.button("Record again", type="secondary", use_container_width=True):
+    if st.button("Predict Other", type="secondary", use_container_width=True):
+
+        # Reset recording widget
         if "my_audio_input" in st.session_state:
             del st.session_state["my_audio_input"]
+
+        # Reset upload widget
+        if "uploaded_file" in st.session_state:
+            del st.session_state["uploaded_file"]
+
+        # Go back to method selection
+        st.session_state.input_mode = None
+
         st.rerun()
 
 with col1:
