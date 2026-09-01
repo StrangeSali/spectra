@@ -7,6 +7,7 @@ import base64
 # CONFIG
 # -----------------------------------------------------------------------
 URL = "https://spectra-1087886990522.europe-west1.run.app/predict"
+#URL = "http://0.0.0.0:8000/predict"
 
 st.set_page_config(
     page_title="Spectra AI",

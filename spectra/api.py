@@ -2,17 +2,14 @@ import os
 import time
 import asyncio
 import tempfile
-import uuid
 from collections import deque
 from typing import Optional, List, Dict, Any
 
 import numpy as np
 import tensorflow_hub as hub
 from tf_keras.models import load_model
-from google.cloud import storage
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, UploadFile, File, Query
 from dotenv import load_dotenv
-import tensorflow as tf
 
 # Cargar variables del archivo .env
 load_dotenv()
