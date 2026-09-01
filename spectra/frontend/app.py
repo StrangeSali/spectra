@@ -6,7 +6,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import os
-from spectra.frontend.support.classes import DEFAULT_CATEGORY, SOUNDS_DICT
+from support.classes import DEFAULT_CATEGORY, SOUNDS_DICT
 
 st.title("Clean MVP")
 
