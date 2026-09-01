@@ -3,8 +3,6 @@ import math
 import random
 from pathlib import Path
 
-# Must be set BEFORE importing pygame
-os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 import numpy as np
 import pygame
