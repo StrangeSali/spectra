@@ -82,4 +82,7 @@ if analyze_clicked and audio_bytes:
         best_class = df.sort_values(by="confidence", ascending=False).iloc[0].class_name
         st.write(best_class)
         best_class_image_path = os.path.join("spectra/frontend/images", f"{best_class}.jpg")
-        st.image(best_class_image_path)
+        try:
+            st.image(best_class_image_path)
+        except:
+            st.text("We dont have an image yet for the class")
