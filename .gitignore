@@ -226,3 +226,4 @@ ESC-50-master/
 *.wav
 raw_data/esc50_dataset/
 .env.yaml
+.DS_Store
