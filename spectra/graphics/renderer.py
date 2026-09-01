@@ -66,7 +66,6 @@ BACKGROUND_IMAGE = pygame.image.load(
     str(ASSETS_DIR / "spectra-background.png")
 )
 
-# Portrait background area
 BACKGROUND_IMAGE = pygame.transform.smoothscale(
     BACKGROUND_IMAGE,
     (SCREEN_WIDTH, 250)
@@ -99,7 +98,10 @@ TALKING_IMAGE = pygame.image.load(
 
 
 # ==================================================
-# CATEGORY CONFIGURATION
+# GRAPHICS CATEGORY CONFIGURATION
+#
+# This is only a visual mapping.
+# The renderer does NOT know how categories are predicted.
 # ==================================================
 
 CATEGORY_IMAGES = {
@@ -137,7 +139,6 @@ SECONDARY_POSITIONS = [
 ]
 
 
-# Used by particle generation
 SOUND_POSITIONS = [
     HERO_POSITION,
     SECONDARY_POSITIONS[0],
@@ -330,37 +331,53 @@ def draw_divider(surface, y):
 # RENDER ONE FRAME
 # ==================================================
 
-def render_frame(predictions, rms):
+def render_frame(predictions, rms=0.0):
     """
     Render one complete mobile Spectra frame.
+
+    The renderer is model-agnostic and API-agnostic.
+
+    It expects already-prepared prediction data such as:
+
+        [
+            {
+                "category": "Human",
+                "display_label": "People talking",
+                "confidence": 0.90,
+            },
+            {
+                "category": "Animal",
+                "display_label": "Dog",
+                "confidence": 0.65,
+            }
+        ]
 
     Parameters
     ----------
     predictions:
-        List of dictionaries, for example:
-
-        [
-            {
-                "category": "Clapping",
-                "display_label": "Clapping",
-                "confidence": 0.90,
-            }
-        ]
+        List of prediction dictionaries.
 
     rms:
         Current audio RMS intensity.
+        Defaults to 0.0 if no RMS value is available.
 
     Returns
     -------
     numpy.ndarray
-        RGB image ready for st.image().
+        RGB image ready for display.
     """
 
-    rms = float(rms)
+    if predictions is None:
+        predictions = []
+
+    try:
+        rms = float(rms)
+    except (TypeError, ValueError):
+        rms = 0.0
 
 
     # ==================================================
-    # 1. NORMALIZE MODEL OUTPUT
+    # 1. PREPARE DISPLAY DATA
     # ==================================================
 
     active_sounds = []
@@ -368,10 +385,17 @@ def render_frame(predictions, rms):
 
     for prediction in predictions:
 
+        if not isinstance(prediction, dict):
+            continue
+
+
         category = prediction.get(
-            "category",
-            prediction.get("class_name")
+            "category"
         )
+
+
+        if not category:
+            continue
 
 
         display_label = prediction.get(
@@ -383,12 +407,15 @@ def render_frame(predictions, rms):
         )
 
 
-        confidence = float(
-            prediction.get(
-                "confidence",
-                0.0
+        try:
+            confidence = float(
+                prediction.get(
+                    "confidence",
+                    0.0
+                )
             )
-        )
+        except (TypeError, ValueError):
+            confidence = 0.0
 
 
         confidence = max(
@@ -397,6 +424,8 @@ def render_frame(predictions, rms):
         )
 
 
+        # Only draw categories for which we have
+        # a visual representation.
         if category in CATEGORY_IMAGES:
 
             active_sounds.append({
@@ -497,7 +526,6 @@ def render_frame(predictions, rms):
     )
 
 
-    # Background artwork behind hero area
     surface.blit(
         BACKGROUND_IMAGE,
         (0, 125)
@@ -636,10 +664,6 @@ def render_frame(predictions, rms):
         # 8. PERSISTENT CONFIDENCE ANIMATION
         # ==================================================
 
-        # Use position + category as the state key.
-        #
-        # This is important because the same category can
-        # move between hero and secondary positions.
         state_key = (
             index,
             category
@@ -1047,8 +1071,8 @@ def render_frame(predictions, rms):
     )
 
 
-    # Pygame = width × height × RGB
-    # Streamlit = height × width × RGB
+    # Pygame = width x height x RGB
+    # Streamlit / image consumers = height x width x RGB
     frame = np.swapaxes(
         frame,
         0,
