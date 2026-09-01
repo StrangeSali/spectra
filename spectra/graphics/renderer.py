@@ -254,6 +254,7 @@ SECONDARY_POSITIONS = [
 ]
 
 
+# Used by particle generation
 SOUND_POSITIONS = [
 
     HERO_POSITION,
@@ -541,7 +542,7 @@ def render_frame(
 
 
     # ==================================================
-    # 1. PREPARE DISPLAY DATA
+    # 1. NORMALIZE MODEL OUTPUT
     # ==================================================
 
     active_sounds = []
@@ -558,7 +559,8 @@ def render_frame(
 
 
         category = prediction.get(
-            "category"
+            "category",
+            prediction.get("class_name")
         )
 
 
@@ -750,6 +752,7 @@ def render_frame(
     )
 
 
+    # Background artwork behind hero area
     surface.blit(
         BACKGROUND_IMAGE,
         (
@@ -977,6 +980,10 @@ def render_frame(
         # 8. CONFIDENCE ANIMATION
         # ==================================================
 
+        # Use position + category as the state key.
+        #
+        # This is important because the same category can
+        # move between hero and secondary positions.
         state_key = (
             index,
             category,

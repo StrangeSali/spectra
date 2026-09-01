@@ -1,42 +1,68 @@
-import asyncio
 import json
-import numpy as np
+import queue
 import sounddevice as sd
-import websockets
+import websocket
+import os
 
-WS_URL = "wss://spectra-1087886990522.europe-west1.run.app/predict-mic"
+# Your deployed Cloud Run WebSocket URL
+WS_URL = os.getenv("CLOUD_RUN_WS_URL")
 
-RATE = 8000
-SECONDS = 1
+SAMPLE_RATE = 16000
+CHUNK_SIZE = 1024
 
-async def main():
+audio_queue = queue.Queue()
 
-    async with websockets.connect(WS_URL) as ws:
 
-        print(await ws.recv())
+def audio_callback(indata, frames, time, status):
+    if status:
+        print(status)
 
-        while True:
+    audio_queue.put(indata.copy())
 
-            audio = sd.rec(
-                int(RATE * SECONDS),
-                samplerate=RATE,
-                channels=1,
-                dtype="float32"
-            )
 
-            sd.wait()
+def main():
+    print("Connecting to API...")
 
-            await ws.send(audio.flatten().tobytes())
+    ws = websocket.create_connection(WS_URL)
 
-            try:
-                response = await asyncio.wait_for(
-                    ws.recv(),
-                    timeout=2
-                )
+    print("Connected!")
+    print("🎤 Microphone is ON")
+    print("Speak / clap / knock / make sounds...")
+    print("Press Ctrl+C to stop.\n")
 
-                print(json.loads(response))
+    try:
+        with sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=1,
+            dtype="float32",
+            blocksize=CHUNK_SIZE,
+            callback=audio_callback,
+        ):
 
-            except asyncio.TimeoutError:
-                print("No prediction returned")
+            while True:
+                audio = audio_queue.get()
 
-asyncio.run(main())
+                # Send raw float32 audio to the API
+                ws.send(audio.tobytes(), opcode=websocket.ABNF.OPCODE_BINARY)
+
+                # Check whether API returned a prediction
+                ws.settimeout(0.01)
+
+                try:
+                    response = ws.recv()
+
+                    if response:
+                        print("Prediction:", response)
+
+                except websocket.WebSocketTimeoutException:
+                    pass
+
+    except KeyboardInterrupt:
+        print("\nStopping microphone...")
+
+    finally:
+        ws.close()
+
+
+if __name__ == "__main__":
+    main()
