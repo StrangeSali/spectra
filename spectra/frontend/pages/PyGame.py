@@ -16,7 +16,17 @@ from graphics.renderer import render_frame, reset_animation_state
 
 from support.classes import DEFAULT_CATEGORY, SOUNDS_DICT
 
+JPEG_QUALITY = 75
 
+
+def frame_data_uri(predictions, rms):
+    jpeg = render_frame_jpeg(
+        predictions,
+        rms,
+        quality=JPEG_QUALITY,
+    )
+
+    return "data:image/jpeg;base64," + base64.b64encode(jpeg).decode("ascii")
 
 # ==================================================
 # CONFIGURATION
@@ -30,7 +40,7 @@ HOP_SECONDS=1
 # How often we ask the API for its latest prediction.
 POLL_INTERVAL = 0.25
 UPLOAD_TIMEOUT=10
-MAX_PREDICTIONS=200
+MAX_PREDICTIONS=3
 STALE_AFTER=6.0
 # ==================================================
 # API CONFIGURATION
@@ -448,8 +458,7 @@ if not webrtc_ctx.state.playing:
     #STATUS_WRITERS[level](status_placeholder, message)
 
     frame_placeholder.image(
-        render_frame([], 0.0),
-        channels="RGB",
+        frame_data_uri([], 0.0),
         width="stretch",
     )
 
@@ -512,8 +521,7 @@ else:
 
 
             frame_placeholder.image(
-                render_frame(predictions, rms),
-                channels="RGB",
+                frame_data_uri(predictions, rms),
                 width="stretch",
             )
 
