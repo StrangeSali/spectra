@@ -26,7 +26,7 @@ st.markdown(
         --surface: #1B1B24;
         --border: #2A2A36;
         --text: #F2F0EA;
-        --text-dim: #9C9AA8;
+        --text-dim: #D8D6D0;
         --cyan: #00E5C7;
         --violet: #8C6DFF;
     }
@@ -39,6 +39,8 @@ st.markdown(
     .stApp {
         background: var(--bg);
     }
+
+
 
 #MainMenu, footer { visibility: hidden; }
 
@@ -237,7 +239,7 @@ elif st.session_state.input_mode == "upload":
 
 col1, col2  = st.columns(2)
 with col2:
-    if st.button("Predict Other", type="secondary", use_container_width=True):
+    if st.button("Reset", type="secondary", use_container_width=True):
 
         # Reset recording widget
         if "my_audio_input" in st.session_state:
@@ -254,7 +256,7 @@ with col2:
 
 with col1:
     analyze_clicked = st.button(
-        "Analyze Audio & Visualize",
+        "Predict Sound",
         type="primary",
         disabled=audio_bytes is None,
         use_container_width=True,
