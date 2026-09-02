@@ -263,31 +263,6 @@ header {
         color: #0D0D12;
     }
 
-/* ==================================================
-   CLEAN WEBRTC MINIMAL INTERFACE (SUBSTITUTE)
-   ================================================== */
-
-    /* Target the component's internal iframe container directly */
-    iframe[title="streamlit_webrtc.webrtc_streamer"] {
-        background: var(--surface) !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 14px !important;
-    }
-
-    /* Force the wrapper container to match your page theme */
-    div[data-testid="stCustomComponentV1"]:has([class*="spectra_streamer"]),
-    .st-key-spectra_streamer,
-    .st-key-spectra_streamer > div {
-        background: var(--surface) !important;
-        background-color: var(--surface) !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 12px !important;
-        padding: 0.8rem !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-    }
-
     /* ---- Progress bars (confidence) ---- */
     [data-testid="stProgress"] > div > div {
         background: linear-gradient(90deg, var(--cyan), var(--violet));
@@ -601,11 +576,6 @@ with st.container(border=True):
     mode=WebRtcMode.SENDONLY,
     audio_processor_factory=SpectraAudioProcessor,
     media_stream_constraints={"video": False, "audio": True},
-    video_html_attrs={
-        "style": "display: none !important; width: 0px; height: 0px; position: absolute;",
-        "autoPlay": True,
-        "muted": True,
-    }
 )
     inject_webrtc_styles()
 
