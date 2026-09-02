@@ -223,19 +223,19 @@ CATEGORY_COLORS = {
 
 HERO_POSITION = (
     215,
-    300,
+    330,
 )
 
 SECONDARY_POSITIONS = [
 
     (
         120,
-        525,
+        555,
     ),
 
     (
         310,
-        525,
+        555,
     ),
 ]
 
@@ -730,7 +730,7 @@ def render_surface(
         BACKGROUND_IMAGE,
         (
             0,
-            125,
+            80,
         ),
     )
 
@@ -1061,7 +1061,7 @@ def render_surface(
                 sound_name.get_rect(
                     center=(
                         x,
-                        420,
+                        450,
                     )
                 )
             )
@@ -1086,7 +1086,7 @@ def render_surface(
                 percentage_text.get_rect(
                     center=(
                         x,
-                        462,
+                        492,
                     )
                 )
             )
@@ -1115,7 +1115,7 @@ def render_surface(
                 confidence_text.get_rect(
                     center=(
                         x,
-                        492,
+                        522,
                     )
                 )
             )
@@ -1146,7 +1146,7 @@ def render_surface(
                 sound_name.get_rect(
                     center=(
                         x,
-                        615,
+                        645,
                     )
                 )
             )
@@ -1171,7 +1171,7 @@ def render_surface(
                 percentage_text.get_rect(
                     center=(
                         x,
-                        646,
+                        676,
                     )
                 )
             )
