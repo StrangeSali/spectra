@@ -13,7 +13,7 @@ from spectra.processing.categories import (
 
 CATEGORY_DISPLAY_LABELS = {
     "Clapping": "Clapping",
-    "Human": "Human sound",
+    "Human": "Human",
     "Animal": "Animal",
     "Nature": "Nature",
     "Alert": "Alert",
@@ -127,25 +127,6 @@ def predict_probabilities(
 
 
 # ==================================================
-# DISPLAY LABEL FORMATTER
-# ==================================================
-
-def format_label(
-    label,
-):
-
-    return (
-        label
-        .replace(
-            "_",
-            " ",
-        )
-        .strip()
-        .title()
-    )
-
-
-# ==================================================
 # SOUND PREDICTION
 # ==================================================
 
@@ -162,6 +143,58 @@ def predict_sound(
 
     results = []
 
+
+    # ==================================================
+    # DIAGNOSTIC OUTPUT
+    #
+    # This lets us see exactly what the ESC-50
+    # classifier thinks it is hearing BEFORE the
+    # result is presented as a broad Spectra category.
+    # ==================================================
+
+    print("\n" + "=" * 55)
+    print("SPECTRA RAW CLASSIFIER OUTPUT")
+    print("=" * 55)
+
+
+    for rank, idx in enumerate(
+        top_indices,
+        start=1,
+    ):
+
+        raw_class = (
+            ESC50_CLASSES[
+                idx
+            ]
+        )
+
+        raw_confidence = float(
+            probabilities[
+                idx
+            ]
+        )
+
+        broad_category = (
+            SOUNDS_DICT.get(
+                raw_class,
+                DEFAULT_CATEGORY,
+            )
+        )
+
+        print(
+            f"{rank}. "
+            f"{raw_class:<22} "
+            f"{raw_confidence:.4f} "
+            f"-> {broad_category}"
+        )
+
+
+    print("=" * 55 + "\n")
+
+
+    # ==================================================
+    # EXISTING PREDICTION LOGIC
+    # ==================================================
 
     for idx in top_indices:
 
@@ -216,19 +249,12 @@ def predict_sound(
         # USER-FACING LABEL
         # --------------------------------------------------
 
-        if category == "Clapping":
-
-            display_label = (
-                "Clapping"
+        display_label = (
+            CATEGORY_DISPLAY_LABELS.get(
+                category,
+                category,
             )
-
-        else:
-
-            display_label = (
-                format_label(
-                    class_name
-                )
-            )
+        )
 
 
         # --------------------------------------------------
