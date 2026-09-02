@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pygame
 
-from visualizer import lerp
+from .visualizer import lerp
 
 
 # ==================================================
