@@ -1,6 +1,6 @@
 import os
 import time
-
+import base64
 import av
 import numpy as np
 import requests
@@ -12,7 +12,7 @@ from streamlit_webrtc import (
     webrtc_streamer,
 )
 
-from graphics.renderer import render_frame, reset_animation_state
+from graphics.renderer import render_frame, reset_animation_state, render_frame_jpeg
 
 from support.classes import DEFAULT_CATEGORY, SOUNDS_DICT
 
