@@ -1,6 +1,6 @@
 import os
 import time
-
+import streamlit.components.v1 as components
 import av
 import numpy as np
 import requests
@@ -145,47 +145,270 @@ class SpectraAudioProcessor(AudioProcessorBase):
 
 st.set_page_config(
     page_title="Spectra AI",
+    page_icon="🎧",
     layout="centered",
-    initial_sidebar_state="collapsed",
 )
-
-
-# ==================================================
-# MOBILE CSS
-# ==================================================
 
 st.markdown(
     """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
 
-    .block-container {
-        max-width: 500px;
-        padding-top: 1rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+    :root {
+        --bg: #121218;
+        --surface: #1B1B24;
+        --border: #2A2A36;
+        --text: #F2F0EA;
+        --text-dim: #D8D6D0;
+        --cyan: #00E5C7;
+        --violet: #8C6DFF;
     }
 
-    h1 {
-        text-align: center;
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+        color: var(--text);
     }
 
-    video {
-        display: none !important;
+    .stApp {
+        background: var(--bg);
     }
 
-    audio {
-        width: 100% !important;
+
+
+#MainMenu, footer { visibility: hidden; }
+
+header {
+    background: transparent !important;
+}
+
+    /* ---- Hero ---- */
+    .hero-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 700;
+        font-size: 2.6rem;
+        line-height: 1.1;
+        margin-bottom: 0.3rem;
+        background: linear-gradient(90deg, var(--cyan), var(--violet));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
 
+    .hero-subtitle {
+        color: var(--text-dim);
+        font-size: 1.02rem;
+        max-width: 34rem;
+        margin-bottom: 1.6rem;
+    }
+
+    /* ---- Waveform accent (single motion moment) ---- */
+    .waveform {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        height: 34px;
+        margin-bottom: 1.8rem;
+    }
+    .waveform span {
+        display: block;
+        width: 4px;
+        border-radius: 2px;
+        background: linear-gradient(180deg, var(--cyan), var(--violet));
+        animation: pulse 1.2s ease-in-out infinite;
+    }
+    .waveform span:nth-child(1) { height: 10px; animation-delay: 0s; }
+    .waveform span:nth-child(2) { height: 24px; animation-delay: 0.1s; }
+    .waveform span:nth-child(3) { height: 14px; animation-delay: 0.2s; }
+    .waveform span:nth-child(4) { height: 30px; animation-delay: 0.3s; }
+    .waveform span:nth-child(5) { height: 18px; animation-delay: 0.4s; }
+    .waveform span:nth-child(6) { height: 26px; animation-delay: 0.5s; }
+    .waveform span:nth-child(7) { height: 12px; animation-delay: 0.6s; }
+    .waveform span:nth-child(8) { height: 20px; animation-delay: 0.7s; }
+
+    @keyframes pulse {
+        0%, 100% { transform: scaleY(0.6); opacity: 0.7; }
+        50% { transform: scaleY(1); opacity: 1; }
+    }
+
+    /* ---- Cards (st.container(border=True)) ---- */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: var(--surface);
+        border: 1px solid var(--border) !important;
+        border-radius: 14px;
+        padding: 0.4rem;
+    }
+
+    /* ---- Buttons ---- */
+    .stButton > button {
+        background: linear-gradient(90deg, var(--cyan), var(--violet));
+        color: #0D0D12;
+        font-weight: 600;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6rem 1.2rem;
+        transition: opacity 0.15s ease;
+    }
+    .stButton > button:hover {
+        opacity: 0.88;
+        color: #0D0D12;
+    }
+
+/* ==================================================
+   CLEAN WEBRTC MINIMAL INTERFACE (SUBSTITUTE)
+   ================================================== */
+
+    /* Target the component's internal iframe container directly */
+    iframe[title="streamlit_webrtc.webrtc_streamer"] {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 14px !important;
+    }
+
+    /* Force the wrapper container to match your page theme */
+    div[data-testid="stCustomComponentV1"]:has([class*="spectra_streamer"]),
+    .st-key-spectra_streamer,
+    .st-key-spectra_streamer > div {
+        background: var(--surface) !important;
+        background-color: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
+        padding: 0.8rem !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+
+    /* ---- Progress bars (confidence) ---- */
+    [data-testid="stProgress"] > div > div {
+        background: linear-gradient(90deg, var(--cyan), var(--violet));
+    }
+
+    /* ---- Section labels ---- */
+    .section-label {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 600;
+        font-size: 1.05rem;
+        margin: 1.4rem 0 0.6rem 0;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+# -----------------------------------------------------------------------
+# HERO
+# -----------------------------------------------------------------------
+st.markdown(
+    """
+    <div class="waveform">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="hero-title">Spectra AI</div>
+    <div class="hero-subtitle">
+        Record a sound and see it classified and visualized in real time —
+        built for hearing accessibility.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-st.title("Spectra AI")
+def inject_webrtc_styles():
+    components.html(
+        """
+        <script>
+        function styleWebrtcIframe() {
+            try {
+                const parentDoc = window.parent.document;
+                const iframe = parentDoc.querySelector(
+                    'iframe[title="streamlit_webrtc.webrtc_streamer"]'
+                );
+                if (!iframe || !iframe.contentDocument) return;
 
-st.caption("Real-Time Environmental Audio Visualizer")
+                const doc = iframe.contentDocument;
+                let style = doc.getElementById('spectra-injected-style');
+                if (!style) {
+                    style = doc.createElement('style');
+                    style.id = 'spectra-injected-style';
+                    doc.head.appendChild(style);
+                }
+
+                style.textContent = `
+                    html, body, #root {
+                        background: #1B1B24 !important;
+                        color: #F2F0EA !important;
+                        margin: 0 !important;
+                    }
+                    select {
+                        display: none !important;
+                    }
+                    label {
+                        display: none !important;
+                    }
+                    button {
+                        background: linear-gradient(90deg, #00E5C7, #8C6DFF) !important;
+                        color: #0D0D12 !important;
+                        font-family: 'Space Grotesk', sans-serif !important;
+                        font-weight: 700 !important;
+                        border: none !important;
+                        border-radius: 8px !important;
+                        padding: 0.7rem 2rem !important;
+                        text-transform: uppercase !important;
+                        letter-spacing: 0.05em !important;
+                        cursor: pointer !important;
+                    }
+                    video {
+                        display: none !important;
+                    }
+                `;
+            } catch (e) {
+                // cross-origin or iframe not ready yet — will retry
+            }
+        }
+
+        // Iframe gets recreated on Streamlit reruns, so keep reapplying.
+        setInterval(styleWebrtcIframe, 300);
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+# # ==================================================
+# # MOBILE CSS
+# # ==================================================
+
+# st.markdown(
+#     """
+#     <style>
+
+#     .block-container {
+#         max-width: 500px;
+#         padding-top: 1rem;
+#         padding-left: 0.5rem;
+#         padding-right: 0.5rem;
+#     }
+
+#     h1 {
+#         text-align: center;
+#     }
+
+#     video {
+#         display: none !important;
+#     }
+
+#     audio {
+#         width: 100% !important;
+#     }
+
+#     </style>
+#     """,
+#     unsafe_allow_html=True,
+# )
+
+
+# st.title("Spectra AI")
+
+# st.caption("Real-Time Environmental Audio Visualizer")
 
 # ==================================================
 # API -> GRAPHICS ADAPTER
@@ -363,19 +586,17 @@ with st.container(border=True):
     )
 
     webrtc_ctx = webrtc_streamer(
-        key="spectra-live-microphone",
-        mode=WebRtcMode.SENDONLY,
-        media_stream_constraints={
-            "video": False,
-            "audio": {
-                "echoCancellation": True,
-                "noiseSuppression": False,
-                "autoGainControl": False,
-            },
-        },
-        audio_processor_factory=SpectraAudioProcessor,
-        async_processing=True,
-    )
+    key="spectra_streamer",
+    mode=WebRtcMode.SENDONLY,
+    audio_processor_factory=SpectraAudioProcessor,
+    media_stream_constraints={"video": False, "audio": True},
+    video_html_attrs={
+        "style": "display: none !important; width: 0px; height: 0px; position: absolute;",
+        "autoPlay": True,
+        "muted": True,
+    }
+)
+    inject_webrtc_styles()
 
     status_placeholder = st.empty()
 
