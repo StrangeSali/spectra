@@ -13,7 +13,7 @@ from spectra.processing.categories import (
 
 CATEGORY_DISPLAY_LABELS = {
     "Clapping": "Clapping",
-    "Human": "Human sound",
+    "Human": "Human",
     "Animal": "Animal",
     "Nature": "Nature",
     "Alert": "Alert",
@@ -25,11 +25,11 @@ CATEGORY_DISPLAY_LABELS = {
 # ==================================================
 # NORMALIZED CLASS NAMES
 #
-# These are used when several ESC-50 classes are
-# grouped into one Spectra concept.
+# Internal normalized names.
 #
-# We still preserve the original model prediction
-# separately as raw_class_name.
+# The UI no longer uses these as the display label.
+# We still preserve them in class_name for debugging
+# and backend inspection.
 # ==================================================
 
 NORMALIZED_CLASSES = {
@@ -127,25 +127,6 @@ def predict_probabilities(
 
 
 # ==================================================
-# DISPLAY LABEL FORMATTER
-# ==================================================
-
-def format_label(
-    label,
-):
-
-    return (
-        label
-        .replace(
-            "_",
-            " ",
-        )
-        .strip()
-        .title()
-    )
-
-
-# ==================================================
 # SOUND PREDICTION
 # ==================================================
 
@@ -159,18 +140,13 @@ def predict_sound(
         probabilities
     )[::-1][:max_classes]
 
-
     results = []
-
 
     for idx in top_indices:
 
         confidence = float(
-            probabilities[
-                idx
-            ]
+            probabilities[idx]
         )
-
 
         if (
             confidence
@@ -184,9 +160,7 @@ def predict_sound(
         # --------------------------------------------------
 
         raw_class_name = (
-            ESC50_CLASSES[
-                idx
-            ]
+            ESC50_CLASSES[idx]
         )
 
 
@@ -201,7 +175,7 @@ def predict_sound(
 
 
         # --------------------------------------------------
-        # NORMALIZED SPECTRA CLASS
+        # NORMALIZED INTERNAL CLASS
         # --------------------------------------------------
 
         class_name = (
@@ -214,21 +188,26 @@ def predict_sound(
 
         # --------------------------------------------------
         # USER-FACING LABEL
+        #
+        # We display the broad Spectra category rather
+        # than the fine-grained ESC-50 prediction.
+        #
+        # Example:
+        #
+        # laughing     -> Human
+        # crying_baby  -> Human
+        # sneezing     -> Human
+        #
+        # The exact model class remains available in
+        # class_name and raw_class_name for debugging.
         # --------------------------------------------------
 
-        if category == "Clapping":
-
-            display_label = (
-                "Clapping"
+        display_label = (
+            CATEGORY_DISPLAY_LABELS.get(
+                category,
+                category,
             )
-
-        else:
-
-            display_label = (
-                format_label(
-                    class_name
-                )
-            )
+        )
 
 
         # --------------------------------------------------
@@ -256,6 +235,5 @@ def predict_sound(
                     ),
             }
         )
-
 
     return results

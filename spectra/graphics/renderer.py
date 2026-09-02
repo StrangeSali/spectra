@@ -501,12 +501,10 @@ def render_frame(
     [
         {
             "category": "Human",
-            "display_label": "Human",
             "confidence": 0.82
         },
         {
             "category": "Animal",
-            "display_label": "Animal",
             "confidence": 0.51
         }
     ]
@@ -574,15 +572,6 @@ def render_frame(
             continue
 
 
-        display_label = prediction.get(
-            "display_label",
-            prediction.get(
-                "class_name",
-                category,
-            ),
-        )
-
-
         try:
 
             confidence = float(
@@ -613,9 +602,6 @@ def render_frame(
             {
                 "category":
                     category,
-
-                "display_label":
-                    display_label,
 
                 "confidence":
                     confidence,
@@ -893,12 +879,6 @@ def render_frame(
             ]
         )
 
-        display_label = (
-            sound[
-                "display_label"
-            ]
-        )
-
         confidence = (
             sound[
                 "confidence"
@@ -942,10 +922,6 @@ def render_frame(
                 hero_name_font
             )
 
-            category_label_font = (
-                hero_category_font
-            )
-
 
         # --------------------------------------------------
         # SECONDARY
@@ -969,10 +945,6 @@ def render_frame(
 
             name_font = (
                 secondary_name_font
-            )
-
-            category_label_font = (
-                secondary_category_font
             )
 
 
@@ -1087,7 +1059,7 @@ def render_frame(
 
             sound_name = (
                 name_font.render(
-                    display_label.upper(),
+                    category.upper(),
                     True,
                     (
                         245,
@@ -1102,7 +1074,7 @@ def render_frame(
                 sound_name.get_rect(
                     center=(
                         x,
-                        405,
+                        420,
                     )
                 )
             )
@@ -1111,31 +1083,6 @@ def render_frame(
             surface.blit(
                 sound_name,
                 sound_rect,
-            )
-
-
-            category_text = (
-                category_label_font.render(
-                    category.upper(),
-                    True,
-                    color,
-                )
-            )
-
-
-            category_rect = (
-                category_text.get_rect(
-                    center=(
-                        x,
-                        433,
-                    )
-                )
-            )
-
-
-            surface.blit(
-                category_text,
-                category_rect,
             )
 
 
@@ -1152,7 +1099,7 @@ def render_frame(
                 percentage_text.get_rect(
                     center=(
                         x,
-                        467,
+                        462,
                     )
                 )
             )
@@ -1197,7 +1144,7 @@ def render_frame(
 
             sound_name = (
                 name_font.render(
-                    display_label.upper(),
+                    category.upper(),
                     True,
                     (
                         245,
@@ -1212,7 +1159,7 @@ def render_frame(
                 sound_name.get_rect(
                     center=(
                         x,
-                        605,
+                        615,
                     )
                 )
             )
@@ -1237,7 +1184,7 @@ def render_frame(
                 percentage_text.get_rect(
                     center=(
                         x,
-                        636,
+                        646,
                     )
                 )
             )
@@ -1246,31 +1193,6 @@ def render_frame(
             surface.blit(
                 percentage_text,
                 percentage_rect,
-            )
-
-
-            category_text = (
-                category_label_font.render(
-                    category.upper(),
-                    True,
-                    color,
-                )
-            )
-
-
-            category_rect = (
-                category_text.get_rect(
-                    center=(
-                        x,
-                        658,
-                    )
-                )
-            )
-
-
-            surface.blit(
-                category_text,
-                category_rect,
             )
 
 
