@@ -75,7 +75,6 @@ ESC50_CATEGORIES = {
         "sneezing",
         "breathing",
         "coughing",
-        "snoring",
         "drinking_sipping",
         "laughing",
         "footsteps",
