@@ -66,8 +66,7 @@ ESC50_CATEGORIES = {
         "clapping",
         "door_wood_knock",
         "hand_saw",
-        "brushing_teeth",
-        "chainsaw",
+
         "can_opening"
     ],
 
@@ -105,6 +104,8 @@ ESC50_CATEGORIES = {
         "pouring_water",
         "thunderstorm",
         "door_wood_creaks",
+        "brushing_teeth",
+        "chainsaw"
     ],
 
     "Alert": [
