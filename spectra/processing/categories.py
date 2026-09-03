@@ -68,6 +68,7 @@ ESC50_CATEGORIES = {
         "hand_saw",
         "brushing_teeth",
         "chainsaw",
+        "can_opening"
     ],
 
     "Human": [
@@ -79,9 +80,6 @@ ESC50_CATEGORIES = {
         "drinking_sipping",
         "mouse_click",
         "keyboard_typing",
-        "can_opening",
-        "washing_machine",
-        "vacuum_cleaner",
         "clock_alarm",
         "clock_tick",
         "church_bells",
@@ -127,6 +125,8 @@ ESC50_CATEGORIES = {
         "engine",
         "train",
         "airplane",
+        "washing_machine",
+        "vacuum_cleaner",
     ],
 }
 
