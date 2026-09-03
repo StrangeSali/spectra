@@ -90,7 +90,6 @@ ESC50_CATEGORIES = {
         "frog",
         "cat",
         "hen",
-        "insects",
         "sheep",
         "crow",
         "crickets",
